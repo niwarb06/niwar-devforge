@@ -45,3 +45,6 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.12"
 strict = true
 packages = ["devforge_core"]
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
