@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
 
@@ -22,14 +22,14 @@ class DatabaseSessionIssuer:
         record = SessionModel(
             user_id=actor.id,
             token_hash=self._digest(raw_token),
-            expires_at=datetime.now(timezone.utc) + self._ttl,
+            expires_at=datetime.now(UTC) + self._ttl,
         )
         self._db.add(record)
         self._db.commit()
         return raw_token
 
     async def resolve(self, raw_token: str) -> Actor | None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         record = self._db.scalar(
             select(SessionModel).where(
                 SessionModel.token_hash == self._digest(raw_token),
@@ -51,7 +51,7 @@ class DatabaseSessionIssuer:
         )
         if record is None or record.revoked_at is not None:
             return
-        record.revoked_at = datetime.now(timezone.utc)
+        record.revoked_at = datetime.now(UTC)
         self._db.commit()
 
     @staticmethod
