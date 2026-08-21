@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -8,7 +9,9 @@ from devforge_core.main import create_app
 
 
 def test_settings_default_to_development() -> None:
-    settings = Settings(_env_file=None)
+    with patch.dict("os.environ", {}, clear=True):
+        settings = Settings(_env_file=None)
+
     assert settings.environment == "development"
     assert settings.api_prefix == "/api/v1"
     assert settings.is_production is False
