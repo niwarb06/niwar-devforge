@@ -5,13 +5,13 @@ from time import perf_counter
 from uuid import uuid4
 
 from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        payload = {
+        payload: dict[str, object] = {
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -37,7 +37,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._logger_factory = logger_factory or (lambda: logging.getLogger("devforge.request"))
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], object]) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = request.headers.get("X-Request-ID") or str(uuid4())
         started = perf_counter()
         response = await call_next(request)
