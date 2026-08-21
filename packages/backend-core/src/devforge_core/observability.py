@@ -33,7 +33,11 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp, logger_factory: Callable[[], logging.Logger] | None = None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        logger_factory: Callable[[], logging.Logger] | None = None,
+    ) -> None:
         super().__init__(app)
         self._logger_factory = logger_factory or (lambda: logging.getLogger("devforge.request"))
 
