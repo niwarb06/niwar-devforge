@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 from .database import get_db
 
 router = APIRouter(tags=["health"])
+DbSession = Annotated[Session, Depends(get_db)]
 
 
 class HealthStatus(BaseModel):
@@ -18,13 +21,9 @@ def liveness() -> HealthStatus:
 
 
 @router.get("/health/ready", response_model=HealthStatus)
-def readiness(response: Response) -> HealthStatus:
+def readiness(response: Response, db: DbSession) -> HealthStatus:
     try:
-        db: Session = next(get_db())
-        try:
-            db.execute(text("SELECT 1"))
-        finally:
-            db.close()
+        db.execute(text("SELECT 1"))
     except Exception:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthStatus(status="not_ready")
