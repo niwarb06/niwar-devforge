@@ -1,10 +1,9 @@
 from uuid import uuid4
 
+from devforge_core.auth.contracts import Actor
+from devforge_core.config import Settings
+from devforge_core.main import create_app
 from fastapi.testclient import TestClient
-
-from src.devforge_core.auth.contracts import Actor
-from src.devforge_core.config import Settings
-from src.devforge_core.main import create_app
 
 
 def test_settings_default_to_development() -> None:
