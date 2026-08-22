@@ -53,16 +53,18 @@ Browser history/session restoration orchestration lives separately in `@niwar-de
 
 ## Integration evidence
 
-`apps/web_next` provides a real Next.js + Chromium reference proof that composes this package with `web-session-core`. The pilot verifies browser-safe login/logout/me route handlers, HttpOnly-cookie behavior, absence of the opaque session token from browser-visible responses/storage/DOM, protected-content gating, server-side session revocation followed by browser back navigation, and disabled-user revalidation.
+`apps/web_next` provides a real Next.js + Chromium reference proof that composes this package with `web-session-core`. The deterministic lifecycle suite verifies browser-safe login/logout/me route handlers, HttpOnly-cookie behavior, absence of the opaque session token from browser-visible responses/storage/DOM, protected-content gating, server-side session revocation followed by browser back navigation, and disabled-user revalidation.
 
-The pilot uses an explicitly gated in-process backend simulator for deterministic CI; it is integration evidence only and is not production-backend evidence.
+A second Chromium suite points the same BFF handlers at the real FastAPI `backend-core` running against migrated PostgreSQL and Redis. That proof exercises registration, login, current-profile read, profile update, protected-page access, and logout without enabling the in-process simulator. The opaque backend session credential remains confined to server-side BFF translation and the HttpOnly cookie boundary.
+
+This is real reusable-backend CI integration evidence, but not production-topology evidence.
 
 ## Current limitations / promotion blockers
 
 - each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
-- real `backend-core` integration behind the BFF still needs production-like evidence
 - a generator-produced product pilot and repeated product reuse are still required for higher maturity
-- no production-like deployment evidence yet
+- no production-like deployment evidence yet, including TLS/ingress/secret-delivery/rollback proof
+- broader lifecycle/failure-path evidence should be repeated in that production-like topology
 
 The package must not be promoted to TRUSTED until those items are closed and the module contract quality gates are met.
 
@@ -82,4 +84,5 @@ CI must verify:
 - browser-supplied forwarding metadata is not relayed by default
 - trusted client-address resolver emits one validated IP when explicitly configured
 - invalid/multi-value resolver output fails closed before backend fetch
-- the Next.js browser pilot remains green for login/logout, history revocation, token non-exposure, and disabled-user behavior
+- the deterministic Next.js browser pilot remains green for login/logout, history revocation, token non-exposure, and disabled-user behavior
+- the real-backend browser pilot remains green against FastAPI `backend-core`, PostgreSQL, and Redis
