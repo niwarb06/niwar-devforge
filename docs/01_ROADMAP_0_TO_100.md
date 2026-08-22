@@ -77,5 +77,7 @@ Build at least two materially different pilot products from DevForge. Measure:
 - defects/regressions
 - custom code required
 
+Evidence baseline: `docs/13_PILOT_PROOF_METRICS.md` records the generated Next.js web-auth and Flutter mobile-auth pilots, their reuse/custom-code/first-build/defect measurements, and exact-head runtime evidence. The phase remains open while the production-candidate duration is `OPEN / NOT REACHED` under the repository Definition of Done and security baseline.
+
 ## Continuous Rule
 Every new project must return reusable improvements to DevForge only after they are generalized, tested, documented, and stripped of product-specific secrets/data.
