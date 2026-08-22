@@ -88,6 +88,10 @@ jobs:
           npm run build
 
       - name: Generate browser proof client
+        env:
+          DEVFORGE_PRODUCT_PUBLIC_ORIGIN: ${{ env.STAGING_PUBLIC_ORIGIN }}
+          DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://backend.internal/api/v1
+          DEVFORGE_PRODUCT_TRUST_INGRESS_CLIENT_IP: "1"
         run: |
           rm -rf .generated/staging-e2e
           node generator/generate.mjs \
