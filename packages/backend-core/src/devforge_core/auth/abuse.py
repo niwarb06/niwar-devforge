@@ -54,7 +54,7 @@ return {current, ttl}
                 self._SCRIPT,
                 1,
                 key,
-                window_seconds * 1_000,
+                str(window_seconds * 1_000),
             )
         except RedisError as exc:
             raise RateLimitBackendUnavailable() from exc
