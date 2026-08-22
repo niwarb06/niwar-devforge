@@ -43,6 +43,7 @@ The workflows do not track a floating `@v2` reference. The action is pinned to t
 
 - Maven artifact: `org.openapitools:openapi-generator-cli`
 - Approved version for this experimental proof: `7.24.0`
+- Approved JAR SHA-256: `4b83ccc6fd43056c8c631cd0195e5100bd0550912502527bab09ac76152dab0c`
 - Upstream repository: `https://github.com/OpenAPITools/openapi-generator`
 - Distribution: Maven Central executable JAR over HTTPS
 - Generator: `dart-dio`
@@ -57,7 +58,14 @@ The `dart-dio` generator is the OpenAPI Generator Dart client option with bearer
 
 ### Reused surface
 
-DevForge invokes the published CLI JAR with the committed `openapi-generator-config.json`. The generator consumes the deterministic backend OpenAPI document and writes a temporary Dart package in CI. No OpenAPI Generator source code is copied into this repository.
+DevForge invokes the published CLI JAR with the committed `openapi-generator-config.json`. The generator consumes the deterministic backend OpenAPI document and writes a temporary Dart package in CI. No OpenAPI Generator source code is copied into this repository. CI verifies both the exact JAR SHA-256 and the reported CLI version before executing generation.
+
+### Security and compatibility findings
+
+- OpenAPI Generator `7.24.0` currently reports its OpenAPI 3.1 support as beta; the current FastAPI schema therefore remains a generation/parity proof that must be revalidated on generator or schema upgrades
+- the current backend OpenAPI document does not declare a `servers` entry, so generated `dart-dio` output falls back to `http://localhost`; this is another reason the generated transport must not be used directly for production credentials
+- the proof uses the stable `built_value` serialization path; optional/patch-only generator modes were deliberately not enabled because that combination produced invalid generated BuiltValue code for the nullable profile PATCH field in this version
+- the backend currently treats omitted and explicit-null `display_name` as the same value, so the parity proof does not require generated absent-vs-null PATCH semantics
 
 ### Security and adoption limits
 
@@ -66,7 +74,7 @@ DevForge invokes the published CLI JAR with the committed `openapi-generator-con
 - generated runtime dependencies such as Dio/built-value tooling are transient CI proof dependencies here; this review does not automatically approve them for a shipped product
 - mobile opaque session credentials must continue to use reviewed platform secure storage and the DevForge revocation/TLS/error-handling rules
 - generator version, generator type, serialization strategy, or generated-runtime adoption requires compatibility/security review
-- CI verifies the CLI reports version `7.24.0` before generation and fails if generation, serializer build, Dart analysis, or contract parity fails
+- CI fails if checksum/version verification, generation, serializer build, Dart analysis, or contract parity fails
 
 ### Attribution
 
