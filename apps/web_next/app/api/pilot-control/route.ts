@@ -1,4 +1,5 @@
 import {
+  pilotBackendEnabled,
   resetPilotBackend,
   revokeAllPilotSessions,
   setPilotUserDisabled,
@@ -11,6 +12,7 @@ const noStoreHeaders = { "cache-control": "no-store", pragma: "no-cache" };
 
 export async function POST(request: Request): Promise<Response> {
   if (
+    !pilotBackendEnabled() ||
     process.env.DEVFORGE_PILOT_TEST_CONTROL !== "1" ||
     request.headers.get("x-devforge-pilot-control") !== "pilot-e2e"
   ) {
