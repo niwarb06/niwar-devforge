@@ -48,6 +48,11 @@ final class DevForgeMobileAuthClient {
     required String identifier,
     required String password,
   }) async {
+    final existingSession = await _readSession();
+    if (existingSession != null) {
+      throw const AuthSessionStateException('already_authenticated');
+    }
+
     final response = await _sendJson(
       'auth/session',
       method: 'POST',
@@ -71,7 +76,13 @@ final class DevForgeMobileAuthClient {
 
     final now = DateTime.now().toUtc();
     final expiresIn = Duration(seconds: expiresInSeconds);
-    await _sessionVault.save(token: token, expiresIn: expiresIn, now: now);
+    try {
+      await _sessionVault.save(token: token, expiresIn: expiresIn, now: now);
+    } on Object {
+      await _revokeTokenBestEffort(token);
+      throw const AuthSessionStorageException('secure_storage_write_failed');
+    }
+
     return MobileLoginResult(
       authenticated: true,
       expiresAt: now.add(expiresIn),
@@ -79,7 +90,7 @@ final class DevForgeMobileAuthClient {
   }
 
   Future<UserProfile?> currentProfile() async {
-    final session = await _sessionVault.read();
+    final session = await _readSession();
     if (session == null) return null;
 
     final response = await _sendJson(
@@ -88,7 +99,7 @@ final class DevForgeMobileAuthClient {
       authorizationToken: session.token,
     );
     if (response.statusCode == 401) {
-      await _sessionVault.clear();
+      await _clearSession();
       return null;
     }
     if (response.statusCode != 200) {
@@ -98,7 +109,7 @@ final class DevForgeMobileAuthClient {
   }
 
   Future<UserProfile> updateProfile({String? displayName}) async {
-    final session = await _sessionVault.read();
+    final session = await _readSession();
     if (session == null) {
       throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
     }
@@ -110,7 +121,7 @@ final class DevForgeMobileAuthClient {
       body: <String, Object?>{'display_name': displayName},
     );
     if (response.statusCode == 401) {
-      await _sessionVault.clear();
+      await _clearSession();
       throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
     }
     if (response.statusCode != 200) {
@@ -120,9 +131,9 @@ final class DevForgeMobileAuthClient {
   }
 
   Future<LogoutResult> logout() async {
-    final session = await _sessionVault.read();
+    final session = await _readSession();
     if (session == null) {
-      await _sessionVault.clear();
+      await _clearSession();
       return const LogoutResult(
         serverSessionEnded: true,
         wasAlreadySignedOut: true,
@@ -135,7 +146,7 @@ final class DevForgeMobileAuthClient {
       authorizationToken: session.token,
     );
     if (response.statusCode == 204 || response.statusCode == 401) {
-      await _sessionVault.clear();
+      await _clearSession();
       return const LogoutResult(
         serverSessionEnded: true,
         wasAlreadySignedOut: false,
@@ -148,7 +159,36 @@ final class DevForgeMobileAuthClient {
     throw _apiException(response);
   }
 
-  Future<void> clearLocalSession() => _sessionVault.clear();
+  Future<void> clearLocalSession() => _clearSession();
+
+  Future<StoredSession?> _readSession() async {
+    try {
+      return await _sessionVault.read();
+    } on Object {
+      throw const AuthSessionStorageException('secure_storage_read_failed');
+    }
+  }
+
+  Future<void> _clearSession() async {
+    try {
+      await _sessionVault.clear();
+    } on Object {
+      throw const AuthSessionStorageException('secure_storage_clear_failed');
+    }
+  }
+
+  Future<void> _revokeTokenBestEffort(String token) async {
+    try {
+      await _sendJson(
+        'auth/session',
+        method: 'DELETE',
+        authorizationToken: token,
+      );
+    } on Object {
+      // The original secure-storage failure remains authoritative. The token is
+      // never returned to application state even if this cleanup attempt fails.
+    }
+  }
 
   Future<AuthHttpResponse> _sendJson(
     String path, {
