@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "evidence_date": "2026-08-22",
+  "phase": "Phase 8 — Pilot Proof",
+  "status": "open",
+  "pilots": [
+    {
+      "id": "generated-web-auth",
+      "platform": "web-nextjs-browser-bff",
+      "pr_number": 23,
+      "pr_created_at": "2026-08-22T15:26:03Z",
+      "manifest_path": "generator/manifests/web-auth-proof.json",
+      "expected_blueprint": "web-next-auth",
+      "expected_manifest_modules": [
+        "web-bff-core",
+        "web-session-core"
+      ],
+      "additional_reused_runtime_modules": [
+        "backend-core"
+      ],
+      "generated_product_shells": 1,
+      "module_reuse": {
+        "reused_modules": 3,
+        "counted_runtime_building_blocks": 4,
+        "ratio": 0.75
+      },
+      "manual_post_generation_product_source_edits": 0,
+      "manual_product_code_avoidance_ratio": 1.0,
+      "first_working_runtime": {
+        "head_sha": "1c26aaeea54c0d042ebc87b4986879df7ab6c60f",
+        "workflow_run_id": 32581799993,
+        "completed_at": "2026-08-22T15:30:22Z",
+        "seconds_from_pr_open": 259
+      },
+      "final_exact_head": {
+        "head_sha": "1c26aaeea54c0d042ebc87b4986879df7ab6c60f",
+        "workflow_run_id": 32581799993,
+        "completed_at": "2026-08-22T15:30:22Z",
+        "conclusion": "success"
+      },
+      "pilot_blocking_defects_found_and_fixed": [],
+      "unresolved_exact_head_regressions": 0,
+      "production_candidate": {
+        "status": "open_not_reached",
+        "completed_at": null,
+        "seconds_from_pr_open": null
+      }
+    },
+    {
+      "id": "generated-flutter-mobile-auth",
+      "platform": "flutter-mobile-secure-vault",
+      "pr_number": 24,
+      "pr_created_at": "2026-08-22T15:41:13Z",
+      "manifest_path": "generator/manifests/flutter-auth-proof.json",
+      "expected_blueprint": "flutter-mobile-auth",
+      "expected_manifest_modules": [
+        "flutter-auth-core"
+      ],
+      "additional_reused_runtime_modules": [
+        "backend-core"
+      ],
+      "generated_product_shells": 1,
+      "module_reuse": {
+        "reused_modules": 2,
+        "counted_runtime_building_blocks": 3,
+        "ratio": 0.6666666666666666
+      },
+      "manual_post_generation_product_source_edits": 0,
+      "manual_product_code_avoidance_ratio": 1.0,
+      "first_working_runtime": {
+        "head_sha": "ba89cdb4a22825ab08eabfacaa19d680a7fcb201",
+        "workflow_run_id": 32584120140,
+        "completed_at": "2026-08-22T16:22:37Z",
+        "seconds_from_pr_open": 2484
+      },
+      "final_exact_head": {
+        "head_sha": "e69c81e2ce128d330286f0dddce160218c514c59",
+        "workflow_run_id": 32584193945,
+        "completed_at": "2026-08-22T16:23:51Z",
+        "conclusion": "success"
+      },
+      "pilot_blocking_defects_found_and_fixed": [
+        "scrollable_widget_controls_required_explicit_visibility_before_test_taps",
+        "flutter_secure_storage_11_required_android_compile_sdk_37_while_flutter_3_47_host_used_36"
+      ],
+      "unresolved_exact_head_regressions": 0,
+      "production_candidate": {
+        "status": "open_not_reached",
+        "completed_at": null,
+        "seconds_from_pr_open": null
+      }
+    }
+  ],
+  "combined": {
+    "reused_modules": 5,
+    "counted_runtime_building_blocks": 7,
+    "module_reuse_ratio": 0.7142857142857143,
+    "manual_post_generation_product_source_edits": 0,
+    "pilot_blocking_defects_found_and_fixed": 2,
+    "unresolved_exact_head_regressions": 0,
+    "production_candidate_duration_status": "open_not_reached"
+  }
+}
