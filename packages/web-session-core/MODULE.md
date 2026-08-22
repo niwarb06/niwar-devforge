@@ -63,6 +63,10 @@ The module must pass:
 - bounded-body regression
 - listener teardown regression
 
+## Browser pilot evidence
+
+`apps/web_next` now provides a real Next.js App Router + Chromium/Playwright reference pilot. It verifies same-origin BFF login, HttpOnly token isolation, logout/revocation, protected-content gating while `checking`, back/history revalidation after a user is disabled, and transient upstream failure mapping. The pilot uses a test-only HTTP backend so it is integration evidence, not production deployment approval.
+
 ## Promotion gates
 
-Promotion to BETA/TRUSTED requires real-browser integration in a generated Next.js product, including back/forward restoration where the browser supports BFCache, logout/revocation, disabled-user handling, protected-content gating during `checking`, and production-like BFF deployment evidence.
+The real-browser reference integration gate is satisfied at the EXPERIMENTAL level. Promotion to BETA/TRUSTED still requires a generator-produced product pilot plus production-like BFF/backend deployment evidence covering TLS, trusted proxy topology, real PostgreSQL/Redis-backed auth/session behavior, rollback/monitoring, and supported browser history/BFCache behavior.
