@@ -55,7 +55,9 @@ After successful login/logout or another authentication-changing action, product
 
 A second Chromium suite runs the same browser session contract through the real BFF into FastAPI `backend-core` backed by PostgreSQL and Redis. That suite verifies authenticated state after real registration/login, profile reads and updates through the BFF, protected rendering, logout, cookie clearing, and continued token non-exposure with the simulator disabled.
 
-The reference therefore proves both the framework/browser lifecycle contract and real reusable-backend CI integration. It does not yet prove a production ingress/deployment topology.
+A third production-like CI suite runs the real browser/BFF/backend path behind a TLS-terminating ingress harness that sanitizes forwarding metadata before it reaches the BFF. Chromium verifies the HTTPS origin, Secure + HttpOnly session cookie behavior, protected rendering, token non-exposure, and logout while the same path also proves spoofed browser forwarding headers cannot escape the backend client-IP registration rate-limit bucket. See `docs/18_PRODUCTION_LIKE_WEB_INGRESS_PROOF.md`.
+
+The reference therefore proves the framework/browser lifecycle contract, real reusable-backend CI integration, and a production-like TLS ingress composition. It does not yet prove a real staging/production network topology.
 
 ## Tests / quality gate
 
@@ -72,7 +74,8 @@ The module must pass:
 - listener teardown regression
 - real Chromium reference-pilot coverage for protected history restoration and auth lifecycle
 - real-backend Chromium coverage against FastAPI `backend-core`, PostgreSQL, and Redis
+- production-like TLS ingress Chromium coverage for Secure-cookie, protected-rendering, token-isolation, and logout behavior
 
 ## Promotion gates
 
-The real-browser Next.js reference integration and real `backend-core` CI path are now covered. Promotion to BETA/TRUSTED still requires production-like BFF/ingress deployment evidence, exact trusted-proxy topology proof, generator-produced product proof, broader lifecycle/failure-path evidence in that environment, and repeated product reuse required by the DevForge module contract.
+The real-browser Next.js reference integration, real `backend-core` CI path, and production-like TLS ingress CI composition are now covered. Promotion to BETA/TRUSTED still requires real staging/production ingress and BFF network-isolation evidence, exact owned proxy CIDRs, distinct deployed-client rate-limit evidence, production secret/observability/rollback proof, generator-produced product proof, broader lifecycle/failure-path evidence in that deployed environment, and repeated product reuse required by the DevForge module contract.
