@@ -111,22 +111,9 @@ jobs:
         working-directory: .generated/flutter-first
         run: flutter pub get
 
-      - name: Diagnose generated Flutter formatting
+      - name: Format generated Flutter product
         working-directory: .generated/flutter-first
-        run: |
-          rm -rf /tmp/devforge-flutter-before
-          mkdir -p /tmp/devforge-flutter-before
-          cp -R lib test /tmp/devforge-flutter-before/
-          dart format lib test
-          diff -ru /tmp/devforge-flutter-before/lib lib || true
-          diff -ru /tmp/devforge-flutter-before/test test || true
-          echo '=== CANONICAL lib/main.dart ==='
-          cat lib/main.dart
-          echo '=== CANONICAL test/auth_screen_test.dart ==='
-          cat test/auth_screen_test.dart
-          echo '=== CANONICAL test/real_backend_test.dart ==='
-          cat test/real_backend_test.dart
-          exit 1
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze generated Flutter product
         working-directory: .generated/flutter-first
