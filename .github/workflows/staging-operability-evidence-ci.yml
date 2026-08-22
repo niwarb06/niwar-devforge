@@ -5,8 +5,7 @@ on:
     paths:
       - ".github/workflows/staging-operability-evidence-ci.yml"
       - "infrastructure/staging/observability/**"
-      - "infrastructure/staging/scripts/release_guard.py"
-      - "infrastructure/staging/scripts/rollback-release.sh"
+      - "infrastructure/staging/scripts/**"
       - "infrastructure/staging/tests/**"
       - "infrastructure/staging/systemd/**"
       - "infrastructure/staging/OPERABILITY.md"
@@ -14,8 +13,7 @@ on:
     paths:
       - ".github/workflows/staging-operability-evidence-ci.yml"
       - "infrastructure/staging/observability/**"
-      - "infrastructure/staging/scripts/release_guard.py"
-      - "infrastructure/staging/scripts/rollback-release.sh"
+      - "infrastructure/staging/scripts/**"
       - "infrastructure/staging/tests/**"
       - "infrastructure/staging/systemd/**"
       - "infrastructure/staging/OPERABILITY.md"
