@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .contracts import Actor, RegisterCommand
+from .errors import EmailAlreadyExists
 from .models import User
 
 
@@ -28,7 +29,7 @@ class SqlAlchemyUserRepository:
             self._db.commit()
         except IntegrityError as exc:
             self._db.rollback()
-            raise ValueError("email_already_exists") from exc
+            raise EmailAlreadyExists() from exc
         self._db.refresh(user)
         return self._to_actor(user)
 
