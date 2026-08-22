@@ -52,16 +52,23 @@ The backend trusts forwarded client addresses only from the fixed Caddy service-
 
 ## Create staging-only secrets
 
+The backend image deliberately runs as the fixed non-root identity `10001:10001`. Docker Compose implements `file:` secrets as bind mounts, so the host files must grant read access to group `10001`; do not make them world-readable.
+
 Create secret files outside the repository:
 
 ```bash
 sudo install -d -m 0700 /srv/niwar-devforge/staging/secrets
 openssl rand -hex 32 | sudo tee /srv/niwar-devforge/staging/secrets/postgres_password >/dev/null
 openssl rand -hex 32 | sudo tee /srv/niwar-devforge/staging/secrets/redis_password >/dev/null
-sudo chmod 0600 /srv/niwar-devforge/staging/secrets/*
+sudo chown "$(id -u):10001" \
+  /srv/niwar-devforge/staging/secrets/postgres_password \
+  /srv/niwar-devforge/staging/secrets/redis_password
+sudo chmod 0640 \
+  /srv/niwar-devforge/staging/secrets/postgres_password \
+  /srv/niwar-devforge/staging/secrets/redis_password
 ```
 
-Never commit these files. A managed secret store may replace host files if the deployment platform supports it and preserves the same least-privilege boundary.
+The deployment operator remains the file owner and the non-root backend group receives read-only access. PostgreSQL and Redis receive only the individual secrets granted to them by Compose. Never commit these files. A managed secret store may replace host files if the deployment platform supports it and preserves the same least-privilege boundary.
 
 ## Configure
 
@@ -94,7 +101,7 @@ docker compose \
   up -d --build
 ```
 
-`migrate` is a one-shot service. `backend` starts only after migrations complete successfully. `web` starts only after backend health passes and Caddy's internal public CA certificate has been safely exported.
+`migrate` is a one-shot service and runs with the same fixed non-root backend identity. `backend` starts only after migrations complete successfully. `web` starts only after backend health passes and Caddy's internal public CA certificate has been safely exported.
 
 ## Health and smoke validation
 
