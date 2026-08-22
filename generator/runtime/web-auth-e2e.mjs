@@ -5,7 +5,7 @@ import { join } from "node:path";
 const requireFromGeneratedProduct = createRequire(join(process.cwd(), "package.json"));
 const { chromium } = requireFromGeneratedProduct("playwright");
 
-const baseURL = process.env.DEVFORGE_GENERATED_RUNTIME_ORIGIN ?? "http://127.0.0.1:3100";
+const baseURL = process.env.DEVFORGE_GENERATED_RUNTIME_ORIGIN ?? "http://127.0.0.1:3000";
 const password = "devforge-generated-runtime-password";
 const email = `generated-runtime-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
 
@@ -15,8 +15,9 @@ const page = await context.newPage();
 
 try {
   await page.goto("/");
-  await page.getByTestId("session-status").waitFor();
-  assert.equal(await page.getByTestId("session-status").textContent(), "anonymous");
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="session-status"]')?.textContent === "anonymous",
+  );
 
   await page.getByTestId("email").fill(email);
   await page.getByTestId("password").fill(password);
@@ -84,7 +85,9 @@ try {
   await page.getByTestId("logout").click();
   const logoutResponse = await logoutResponsePromise;
   assert.equal(logoutResponse.status(), 204);
-  await page.waitForFunction(() => document.querySelector('[data-testid="session-status"]')?.textContent === "anonymous");
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="session-status"]')?.textContent === "anonymous",
+  );
 
   const cookiesAfterLogout = await context.cookies();
   assert.equal(cookiesAfterLogout.some((cookie) => cookie.name === "devforge_session"), false);
