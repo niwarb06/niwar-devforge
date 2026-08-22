@@ -49,6 +49,12 @@ After successful login/logout or another authentication-changing action, product
 - no React/Next.js runtime dependency
 - import has no browser-global side effects; default globals are resolved when a monitor is created
 
+## Integration evidence
+
+`apps/web_next` is the first real Next.js + Chromium reference integration. Its browser suite verifies login/logout, HttpOnly credential isolation, server-side revocation followed by browser back navigation, explicit BFCache-style `pageshow` revalidation, disabled-user rejection, and protected-DOM fail-closed behavior while session trust is being refreshed.
+
+The reference app proves the framework/browser integration contract. Its in-process backend is deliberately test-only, so the evidence does not replace a real `backend-core` or production-like deployment pilot.
+
 ## Tests / quality gate
 
 The module must pass:
@@ -62,7 +68,8 @@ The module must pass:
 - stale-request ordering regression
 - bounded-body regression
 - listener teardown regression
+- real Chromium reference-pilot coverage for protected history restoration and auth lifecycle
 
 ## Promotion gates
 
-Promotion to BETA/TRUSTED requires real-browser integration in a generated Next.js product, including back/forward restoration where the browser supports BFCache, logout/revocation, disabled-user handling, protected-content gating during `checking`, and production-like BFF deployment evidence.
+The real-browser Next.js reference integration is now proven. Promotion to BETA/TRUSTED still requires real `backend-core` integration, production-like BFF/ingress deployment evidence, generator-produced product proof, broader lifecycle/failure-path evidence in that environment, and repeated product reuse required by the DevForge module contract.
