@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from devforge_core.auth.contracts import Actor
 from devforge_core.auth.permissions import default_authorization_policy
 from devforge_core.database import get_db
-from devforge_core.users import SqlAlchemyUserProfileRepository, UpdateProfileCommand
+from devforge_core.users import (
+    SqlAlchemyUserProfileRepository,
+    UpdateProfileCommand,
+    UserProfile,
+)
 
 from .auth import get_current_actor
 from .contracts import ErrorResponse, UpdateProfileRequest, UserProfileResponse
@@ -21,7 +25,7 @@ _ERROR_RESPONSES = {
 }
 
 
-def _to_response(profile: object) -> UserProfileResponse:
+def _to_response(profile: UserProfile) -> UserProfileResponse:
     return UserProfileResponse.model_validate(profile, from_attributes=True)
 
 
