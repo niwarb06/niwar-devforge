@@ -13,7 +13,9 @@ class ApiError(Exception):
     message: str | None = None
 
 
-async def api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
+async def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, ApiError):
+        raise exc
     payload = ErrorResponse(code=exc.code, message=exc.message)
     return JSONResponse(status_code=exc.status_code, content=payload.model_dump())
 
