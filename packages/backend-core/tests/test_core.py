@@ -8,8 +8,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from devforge_core.api.contracts import UpdateProfileRequest
 from devforge_core.auth.contracts import Actor, LoginCommand, RegisterCommand
+from devforge_core.auth.errors import (
+    EmailAlreadyExists,
+    InvalidCredentials,
+    PasswordPolicyViolation,
+)
 from devforge_core.auth.models import Base
+from devforge_core.auth.permissions import default_authorization_policy
 from devforge_core.auth.repository import SqlAlchemyUserRepository
 from devforge_core.auth.security import Argon2Hasher
 from devforge_core.auth.service import AuthService
@@ -18,6 +25,7 @@ from devforge_core.cache import get_redis
 from devforge_core.config import Settings
 from devforge_core.database import get_db
 from devforge_core.main import create_app
+from devforge_core.users import SqlAlchemyUserProfileRepository, UpdateProfileCommand
 
 
 def test_settings_default_to_development() -> None:
@@ -33,6 +41,28 @@ def test_settings_default_to_development() -> None:
 def test_actor_is_immutable_contract() -> None:
     actor = Actor(id=uuid4(), email="user@example.com", display_name="User", roles=("user",))
     assert actor.roles == ("user",)
+
+
+def test_default_rbac_policy_enforces_role_permissions() -> None:
+    policy = default_authorization_policy()
+    user = Actor(id=uuid4(), email="user@example.com", display_name=None, roles=("user",))
+    admin = Actor(id=uuid4(), email="admin@example.com", display_name=None, roles=("admin",))
+
+    assert policy.allows(user, "profile.read:self") is True
+    assert policy.allows(user, "users.manage") is False
+    assert policy.allows(admin, "users.manage") is True
+
+
+def test_profile_api_contract_rejects_unknown_fields() -> None:
+    request = UpdateProfileRequest(display_name="  User  ")
+    assert request.display_name == "  User  "
+
+    try:
+        UpdateProfileRequest(display_name="User", unknown=True)
+    except Exception:
+        pass
+    else:
+        raise AssertionError("unknown API fields must be rejected")
 
 
 def test_argon2_password_hasher_round_trip() -> None:
@@ -128,5 +158,59 @@ def test_auth_register_login_resolve_and_revoke() -> None:
         assert logged_in_actor == actor
         assert resolved_actor == actor
 
+        profiles = SqlAlchemyUserProfileRepository(db)
+        profile = profiles.get(actor.id)
+        assert profile is not None
+        assert profile.display_name == "User"
+
+        updated = profiles.update(actor.id, UpdateProfileCommand(display_name="  Updated User  "))
+        assert updated is not None
+        assert updated.display_name == "Updated User"
+
         asyncio.run(sessions.revoke(raw_token))
         assert asyncio.run(sessions.resolve(raw_token)) is None
+
+
+def test_auth_service_uses_typed_errors() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    with factory() as db:
+        auth = AuthService(
+            users=SqlAlchemyUserRepository(db),
+            passwords=Argon2Hasher(),
+            sessions=DatabaseSessionIssuer(db),
+        )
+        email = f"typed-{uuid4()}@example.com"
+        command = RegisterCommand(email=email, password="correct-horse-battery-staple")
+        asyncio.run(auth.register(command))
+
+        try:
+            asyncio.run(auth.login(LoginCommand(identifier=email, password="wrong-password")))
+        except InvalidCredentials as exc:
+            assert exc.code == "invalid_credentials"
+        else:
+            raise AssertionError("invalid login must raise InvalidCredentials")
+
+        try:
+            asyncio.run(auth.register(RegisterCommand(email=email, password=command.password)))
+        except EmailAlreadyExists as exc:
+            assert exc.code == "email_already_exists"
+        else:
+            raise AssertionError("duplicate registration must raise EmailAlreadyExists")
+
+        short_password_command = RegisterCommand(
+            email=f"short-{uuid4()}@example.com",
+            password="short",
+        )
+        try:
+            asyncio.run(auth.register(short_password_command))
+        except PasswordPolicyViolation as exc:
+            assert exc.reason == "password_too_short"
+        else:
+            raise AssertionError("weak password must raise PasswordPolicyViolation")
