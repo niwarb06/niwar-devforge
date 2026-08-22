@@ -27,9 +27,12 @@ export const pilotBff = createWebAuthBff({
   backendApiBaseUrl,
   cookieName: "devforge_pilot_session",
   secureCookie: publicOrigin.startsWith("https://"),
-  // Deployment-specific adapter. Enable only when the BFF is reachable solely through
-  // an ingress that removes/overwrites this header from every external request.
-  resolveTrustedClientAddress: trustIngressClientAddress
-    ? async (request) => request.headers.get("x-devforge-ingress-client-ip")
-    : undefined,
+  ...(trustIngressClientAddress
+    ? {
+        // Deployment-specific adapter. Enable only when the BFF is reachable solely through
+        // an ingress that removes/overwrites this header from every external request.
+        resolveTrustedClientAddress: async (request: Request) =>
+          request.headers.get("x-devforge-ingress-client-ip"),
+      }
+    : {}),
 });
