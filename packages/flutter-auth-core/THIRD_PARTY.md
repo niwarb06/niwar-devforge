@@ -3,8 +3,8 @@
 ## flutter_secure_storage
 
 - Package: `flutter_secure_storage`
-- Approved version for this experimental proof: `11.0.0`
-- Version pin: exact (`11.0.0`), not a floating caret range
+- Approved version for this experimental proof: `10.3.1`
+- Version pin: exact (`10.3.1`), not a floating caret range
 - Upstream repository: `https://github.com/juliansteenbakker/flutter_secure_storage`
 - Package registry: `https://pub.dev/packages/flutter_secure_storage`
 - License: BSD-3-Clause
@@ -18,11 +18,17 @@ DevForge uses the public key/value secure-storage API through `FlutterSecureStor
 ### Security and compatibility findings
 
 - the package provides platform-backed secure storage and is appropriate for storing opaque mobile session credentials
-- version 11 uses newer Android cryptographic defaults and requires Android API 23+
-- version 11 removed deprecated behavior from v10; existing apps with data written by pre-v10 deprecated algorithms should migrate through v10 before adopting v11
-- the new DevForge module has no legacy secure-storage data, so that migration issue does not apply to the initial proof
+- the v10 line uses the modern Android RSA-OAEP key cipher and AES-GCM storage cipher path, replacing the deprecated Jetpack Security storage backend
+- `10.3.1` includes Android biometric retry/cancellation fixes and remains compatible with the current Flutter `3.47.0` generated Android host proof targeting Android SDK 36
+- upstream `11.0.0` raises Android `compileSdk` to 37; the current Flutter `3.47.0` host template compiles against SDK 36 with Android Gradle Plugin 9.1.0, so v11 cannot pass the Android build gate without a broader Android toolchain upgrade
+- v11 also removes deprecated pre-v10 algorithms; products carrying legacy secure-storage data must complete the upstream v10 migration path before adopting v11
+- the new DevForge proof has no legacy secure-storage data, but future generated products may, so migration review remains mandatory on a major-version upgrade
 - generated Android/iOS products must still verify upstream platform configuration and real-device behavior before release
 - web support from the upstream package is not used by this module; DevForge browser authentication uses the separate BFF/cookie transport
+
+### Upgrade boundary
+
+`10.3.1` is a compatibility pin, not a permanent ceiling. Upgrade to v11+ only after the reviewed Flutter/Android Gradle toolchain supports compile SDK 37 or later and the affected product's secure-storage migration path has been validated. The Android APK gate, module tests, analyzer, and real-device secure-storage tests must be rerun on that upgrade.
 
 ### Attribution
 
