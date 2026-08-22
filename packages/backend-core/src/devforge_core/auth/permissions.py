@@ -9,7 +9,8 @@ class RolePermissionPolicy:
 
     def allows(self, actor: Actor, permission: str) -> bool:
         return any(
-            permission in self.role_permissions.get(role, frozenset())
+            "*" in self.role_permissions.get(role, frozenset())
+            or permission in self.role_permissions.get(role, frozenset())
             for role in actor.roles
         )
 
