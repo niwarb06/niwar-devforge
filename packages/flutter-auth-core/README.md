@@ -35,8 +35,11 @@ Future<void> main() async {
 - Response bodies are capped at 64 KiB by default.
 - Raw session tokens are never included in `MobileLoginResult` or exception strings.
 - Expired or backend-rejected (`401`) sessions are deleted from secure storage.
+- A second login is rejected while a valid local session already exists; callers must explicitly logout first instead of silently replacing a credential and orphaning the older server session.
+- If the backend creates a new session but secure persistence fails, the client immediately attempts server-side revocation of that unpersisted token and returns a sanitized storage error.
 - Logout clears local storage only after the backend confirms `204` or `401`; transient failures retain the credential so server-side revocation can be retried.
 - `clearLocalSession()` exists for an explicit local-only reset and is intentionally separate from secure logout.
+- Secure-storage read/write/clear failures exposed by the client use sanitized error codes rather than raw provider exceptions.
 - No password, session token, or response body is logged by this package.
 
 ## Secure storage adapter
@@ -59,4 +62,4 @@ FastAPI OpenAPI remains the source of truth. This package proves the mobile tran
 
 ## Development
 
-CI pins Flutter `3.47.0` and runs formatting, analysis, and tests. The module remains EXPERIMENTAL until Android/iOS device integration, generated-client parity, broader failure-path coverage, and a production-like pilot are complete.
+CI pins Flutter `3.47.0` and runs formatting, analysis, tests, and a dependency snapshot. CI setup actions are pinned to reviewed commit SHAs. The module remains EXPERIMENTAL until Android/iOS device integration, generated-client parity, broader failure-path coverage, and a production-like pilot are complete.
