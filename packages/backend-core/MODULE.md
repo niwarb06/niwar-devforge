@@ -84,7 +84,7 @@ Session tokens are opaque. Only token digests are persisted.
 - Tenant authorization validates active tenant boundaries and active memberships.
 - Tenant-scoped roles are namespaced so membership roles cannot be mistaken for global roles.
 - Global admins cannot bypass a missing or disabled tenant boundary.
-- Login and registration are rate-limited by direct client address plus a SHA-256 identifier bucket; plaintext email/identifier values are not used in Redis keys.
+- Login and registration are rate-limited with separate SHA-256 buckets for the direct client address and normalized identifier; plaintext client addresses and email/identifier values are not used in Redis keys.
 - Credential rate limiting fails closed with a generic `503 temporarily_unavailable` response if the Redis abuse-control backend is unavailable.
 - The core does not trust `X-Forwarded-For` by default; reverse-proxy deployments must establish trusted-proxy handling at the deployment boundary before using forwarded client addresses.
 - Duplicate registration uses a generic public error rather than exposing the persisted email-existence condition.
@@ -100,7 +100,7 @@ FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, identifier-key privacy, and OpenAPI contracts. The module remains EXPERIMENTAL until web BFF transport, trusted-proxy deployment policy, Flutter client proof, broader failure-path coverage, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. The module remains EXPERIMENTAL until web BFF transport, trusted-proxy deployment policy, Flutter client proof, broader failure-path coverage, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
