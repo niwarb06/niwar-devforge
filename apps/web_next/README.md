@@ -12,12 +12,15 @@ This app is the real-browser integration proof for the reusable `web-bff-core` a
 - Back/forward navigation and BFCache-style `pageshow` restoration force session revalidation.
 - Server-side revocation is reflected in the browser before restored protected content is trusted.
 - Logout clears the HttpOnly browser cookie and revalidates the client state.
+- A disabled user is rejected by the next browser session check.
 
 ## Pilot-only backend
 
 `/api/pilot-backend/v1/*` is an in-process contract simulator used only by this reference app and E2E tests. It is **not** a substitute for `backend-core`, PostgreSQL, Redis, production rate limiting, or deployment proof.
 
-The test-control route is disabled unless `DEVFORGE_PILOT_TEST_CONTROL=1` and also requires the fixed CI-only header used by the Playwright suite.
+In development the simulator is available for local proof. Under `NODE_ENV=production` it returns 404 unless `DEVFORGE_PILOT_INPROCESS_BACKEND=1` is explicitly set. The test-control route additionally requires `DEVFORGE_PILOT_TEST_CONTROL=1` and the fixed CI-only header used by the Playwright suite.
+
+Production-mode startup also requires explicit `DEVFORGE_PILOT_PUBLIC_ORIGIN` and `DEVFORGE_PILOT_BACKEND_API_BASE_URL`; it never silently falls back to localhost configuration.
 
 ## Local proof
 
@@ -30,15 +33,17 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Default local origin: `http://127.0.0.1:3000`.
+Default local development origin: `http://127.0.0.1:3000`.
 
 ## Security boundary
 
 - No bearer token is stored in localStorage, sessionStorage, IndexedDB, URLs, React state, or browser-visible JSON.
+- The browser login response is consumed and must contain `authenticated: true`; any browser-visible `session_token` field is rejected.
 - The browser cookie is HttpOnly and SameSite=Lax.
-- Local HTTP uses a non-`__Host-` cookie only for this development proof. Production must use the secure BFF cookie contract.
+- Local HTTP uses a non-`__Host-` cookie only for this development proof. Production products must use the secure BFF cookie contract.
 - Protected DOM is fail-closed by a document-level trust marker in addition to React state, so a restored DOM snapshot is hidden synchronously when revalidation begins.
+- The in-process simulator and its fixed pilot credentials are test/reference infrastructure only and must not be deployed as an application backend.
 
 ## Remaining promotion work
 
-This pilot closes the real Next.js/browser integration gap. Promotion of the web auth foundation to TRUSTED still requires production-like ingress/BFF deployment evidence, real backend integration, and the broader module promotion gates documented by DevForge.
+This pilot closes the framework integration and real-Chromium browser proof gap for the reusable web auth modules. Promotion of the web auth foundation to TRUSTED still requires real `backend-core` integration, production-like ingress/BFF deployment evidence, generator-produced product proof, and the broader module promotion gates documented by DevForge.
