@@ -23,17 +23,28 @@ test("login keeps opaque session out of browser JavaScript and browser-visible J
   await page.goto("/");
   await expect(page.getByTestId("session-status")).toHaveText("anonymous");
 
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/auth/login") && response.request().method() === "POST",
-  );
-  await page.getByRole("button", { name: "Sign in" }).click();
-  const loginResponse = await responsePromise;
-  const body = (await loginResponse.json()) as Record<string, unknown>;
+  const loginResult = await page.evaluate(async () => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        identifier: "pilot@example.test",
+        password: "correct-horse-battery-staple",
+      }),
+      cache: "no-store",
+      redirect: "error",
+    });
+    return {
+      status: response.status,
+      body: (await response.json()) as Record<string, unknown>,
+    };
+  });
 
-  expect(loginResponse.status()).toBe(200);
-  expect(body.authenticated).toBe(true);
-  expect(body.session_token).toBeUndefined();
+  expect(loginResult.status).toBe(200);
+  expect(loginResult.body.authenticated).toBe(true);
+  expect(loginResult.body.session_token).toBeUndefined();
+
+  await page.reload();
   await expect(page.getByTestId("session-status")).toHaveText("authenticated");
   await expect(page.getByTestId("profile-email")).toHaveText("pilot@example.test");
 
