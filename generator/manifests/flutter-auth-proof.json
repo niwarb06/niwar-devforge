@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "blueprint": "flutter-mobile-auth",
+  "product": {
+    "slug": "generated-mobile-auth-proof",
+    "display_name": "Generated Mobile Auth Proof",
+    "package_name": "generated_mobile_auth_proof"
+  },
+  "modules": [
+    "flutter-auth-core"
+  ],
+  "package_specs": {
+    "flutter-auth-core": "../../packages/flutter-auth-core"
+  }
+}
