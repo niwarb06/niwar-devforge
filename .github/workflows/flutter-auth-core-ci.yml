@@ -1,0 +1,45 @@
+name: Flutter Auth Core CI
+
+on:
+  push:
+    paths:
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/flutter-auth-core-ci.yml"
+  pull_request:
+    paths:
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/flutter-auth-core-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/flutter-auth-core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      - name: Dependency snapshot
+        run: flutter pub deps --style=compact
