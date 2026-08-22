@@ -1,0 +1,17 @@
+name: niwar_devforge_flutter_auth
+description: Reusable mobile authentication client and secure session storage proof for Niwar DevForge.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.11.0 <4.0.0"
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: 11.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
