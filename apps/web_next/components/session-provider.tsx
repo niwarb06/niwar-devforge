@@ -109,6 +109,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       redirect: "error",
     });
     if (!response.ok) return false;
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return false;
+    }
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return false;
+    const result = payload as Record<string, unknown>;
+    if (result.authenticated !== true || "session_token" in result) return false;
+
     const next = await revalidate();
     return next.status === "authenticated";
   }, [revalidate]);
