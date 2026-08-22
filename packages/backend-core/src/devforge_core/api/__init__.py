@@ -1,7 +1,11 @@
 from .contracts import (
     ApiModel,
     ErrorResponse,
+    LoginRequest,
     PermissionCheckResponse,
+    RegisterRequest,
+    RegistrationAcceptedResponse,
+    SessionTokenResponse,
     UpdateProfileRequest,
     UserProfileResponse,
 )
@@ -9,7 +13,11 @@ from .contracts import (
 __all__ = [
     "ApiModel",
     "ErrorResponse",
+    "LoginRequest",
     "PermissionCheckResponse",
+    "RegisterRequest",
+    "RegistrationAcceptedResponse",
+    "SessionTokenResponse",
     "UpdateProfileRequest",
     "UserProfileResponse",
 ]

@@ -14,7 +14,7 @@ The exporter sorts JSON keys and writes a deterministic UTF-8 document suitable 
 
 ## Current TypeScript proof
 
-Backend Core CI currently performs an **experimental, generation-only proof** with `openapi-typescript` version `7.13.0`. The CLI consumes the exported schema and must produce TypeScript declarations containing the protected profile routes and `UserProfileResponse` contract.
+Backend Core CI currently performs an **experimental, generation-only proof** with `openapi-typescript` version `7.13.0`. The CLI consumes the exported schema and must produce TypeScript declarations containing the credential, protected-profile, and logout routes plus their typed request/response contracts.
 
 Provenance for this CI-only tool:
 
@@ -25,6 +25,19 @@ Provenance for this CI-only tool:
 - no generated authentication secret, token, or runtime credential is committed
 
 The version is explicitly pinned in CI. This proof does **not** yet promote a reusable TypeScript client package; a product/client package must add its own dependency lockfile, platform tests, and transport adapter before promotion.
+
+## Credential transport boundary
+
+The schema includes:
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `DELETE /api/v1/auth/session`
+- protected profile routes
+
+`POST /api/v1/auth/login` returns an opaque bearer session token for mobile/API/server-side transports. Browser JavaScript must not receive or persist this token. Web products call the credential API from their same-origin server/BFF and translate authenticated state into Secure + HttpOnly cookies according to `docs/16_AUTH_CORE_DECISION.md`.
+
+Generated clients must preserve `Cache-Control: no-store` behavior around credential responses and must not add token logging.
 
 ## Client generation
 

@@ -82,7 +82,11 @@ jobs:
         run: |
           npx --yes --package=openapi-typescript@7.13.0 openapi-typescript \
             /tmp/devforge-openapi.json -o /tmp/devforge-openapi.d.ts
+          grep -q 'RegistrationAcceptedResponse' /tmp/devforge-openapi.d.ts
+          grep -q 'SessionTokenResponse' /tmp/devforge-openapi.d.ts
           grep -q 'UserProfileResponse' /tmp/devforge-openapi.d.ts
+          grep -q '"/api/v1/auth/register"' /tmp/devforge-openapi.d.ts
+          grep -q '"/api/v1/auth/login"' /tmp/devforge-openapi.d.ts
           grep -q '"/api/v1/users/me"' /tmp/devforge-openapi.d.ts
           grep -q '"/api/v1/auth/session"' /tmp/devforge-openapi.d.ts
 
