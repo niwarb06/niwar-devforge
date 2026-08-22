@@ -1,0 +1,63 @@
+name: Web Next Browser Pilot CI
+
+on:
+  push:
+    paths:
+      - "apps/web_next/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-next-pilot-ci.yml"
+  pull_request:
+    paths:
+      - "apps/web_next/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-next-pilot-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-pilot:
+    runs-on: ubuntu-24.04
+    env:
+      DEVFORGE_BACKEND_API_BASE_URL: "http://127.0.0.1:4101/api/v1"
+      DEVFORGE_PUBLIC_ORIGIN: "http://127.0.0.1:4100"
+      DEVFORGE_PILOT_ALLOW_INSECURE_LOCALHOST: "1"
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Build reusable web auth packages
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm --prefix packages/web-bff-core install --no-audit --no-fund
+          npm --prefix packages/web-bff-core run build
+          npm --prefix packages/web-session-core install --no-audit --no-fund
+          npm --prefix packages/web-session-core run build
+
+      - name: Install pilot dependencies
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm --prefix apps/web_next install --no-audit --no-fund
+
+      - name: Typecheck pilot
+        run: npm --prefix apps/web_next run typecheck
+
+      - name: Build Next.js pilot
+        run: npm --prefix apps/web_next run build
+
+      - name: Install Chromium
+        working-directory: apps/web_next
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser lifecycle tests
+        run: npm --prefix apps/web_next run test:e2e
+
+      - name: Direct dependency snapshot
+        run: npm --prefix apps/web_next ls --depth=0
