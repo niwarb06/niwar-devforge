@@ -51,11 +51,17 @@ The backend must separately configure only the real BFF/proxy network ranges in 
 
 Browser history/session restoration orchestration lives separately in `@niwar-devforge/web-session-core`. Keeping that browser-safe package separate prevents server-only BFF configuration and credential-translation code from being bundled into client UI code.
 
+## Integration evidence
+
+`apps/web_next` provides a real Next.js + Chromium reference proof that composes this package with `web-session-core`. The pilot verifies browser-safe login/logout/me route handlers, HttpOnly-cookie behavior, absence of the opaque session token from browser-visible responses/storage/DOM, protected-content gating, server-side session revocation followed by browser back navigation, and disabled-user revalidation.
+
+The pilot uses an explicitly gated in-process backend simulator for deterministic CI; it is integration evidence only and is not production-backend evidence.
+
 ## Current limitations / promotion blockers
 
 - each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
-- framework-neutral browser history/BFCache revalidation is implemented in `web-session-core`, but a real generated Next.js application/browser integration proof is still required
-- no full generated Next.js application pilot yet
+- real `backend-core` integration behind the BFF still needs production-like evidence
+- a generator-produced product pilot and repeated product reuse are still required for higher maturity
 - no production-like deployment evidence yet
 
 The package must not be promoted to TRUSTED until those items are closed and the module contract quality gates are met.
@@ -76,3 +82,4 @@ CI must verify:
 - browser-supplied forwarding metadata is not relayed by default
 - trusted client-address resolver emits one validated IP when explicitly configured
 - invalid/multi-value resolver output fails closed before backend fetch
+- the Next.js browser pilot remains green for login/logout, history revocation, token non-exposure, and disabled-user behavior
