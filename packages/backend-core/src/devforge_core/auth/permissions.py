@@ -1,11 +1,13 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from .contracts import Actor
 
 
 @dataclass(frozen=True, slots=True)
 class RolePermissionPolicy:
-    role_permissions: dict[str, frozenset[str]]
+    role_permissions: Mapping[str, frozenset[str]]
 
     def allows(self, actor: Actor, permission: str) -> bool:
         return any(
@@ -15,10 +17,16 @@ class RolePermissionPolicy:
         )
 
 
-DEFAULT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
-    "user": frozenset({"profile.read:self", "profile.write:self"}),
-    "admin": frozenset({"*"}),
-}
+DEFAULT_ROLE_PERMISSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "user": frozenset({"profile.read:self", "profile.write:self"}),
+        "tenant:member": frozenset(
+            {"tenant.read", "profile.read:self", "profile.write:self"}
+        ),
+        "tenant:owner": frozenset({"tenant.read", "tenant.write", "tenant.members.manage"}),
+        "admin": frozenset({"*"}),
+    }
+)
 
 
 def default_authorization_policy() -> RolePermissionPolicy:
