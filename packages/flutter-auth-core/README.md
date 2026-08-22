@@ -62,14 +62,16 @@ The proof covers these backend-core contracts:
 - `GET /api/v1/users/me`
 - `PATCH /api/v1/users/me/profile`
 
-FastAPI OpenAPI remains the source of truth. In addition to the hand-written secure transport proof, CI now exports the live backend schema, generates an ephemeral Dart client with OpenAPI Generator `7.24.0` using the stable `dart-dio` generator, builds the generated serializers, analyzes the generated package, and runs `scripts/verify_openapi_parity.py`.
+FastAPI OpenAPI remains the source of truth. In addition to the hand-written secure transport proof, CI exports the live backend schema, generates an ephemeral Dart client with OpenAPI Generator `7.24.0` using the stable `dart-dio` generator, builds the generated serializers, analyzes the generated package, and runs `scripts/verify_openapi_parity.py`.
 
 The parity verifier locks the mobile-auth assumptions that matter most: endpoint/method/status pairs, `DevForgeSession` bearer security, request/response component names, credential field bounds, session response invariants, profile shape, and presence of the same routes/models in generated Dart source.
 
-The generated package is **not committed, published, or used as the mobile credential transport yet**. Its generated Dio/auth layer must not bypass this module's HTTPS, no-redirect, secure-storage, revocation, and sanitized-error policies. A later integration step can reuse generated contract models/API signatures behind the reviewed mobile security boundary.
+The generated package is **not committed, published, or used as the mobile credential transport yet**. OpenAPI Generator currently reports OpenAPI 3.1 support as beta, and because the backend schema does not publish a `servers` entry the generated client defaults to `http://localhost`. Those behaviors are acceptable only for this build/parity proof; generated Dio/auth code must not handle production credentials until a separate transport/security integration review proves HTTPS, redirect, secure-storage, revocation, and sanitized-error behavior.
 
-Generator options are recorded in `openapi-generator-config.json`; provenance and adoption limits are in `THIRD_PARTY.md`.
+The proof intentionally stays on the stable `built_value` serialization path. Generator optional/patch-only modes are not enabled in this version because they produced invalid BuiltValue code for the nullable profile PATCH field; the current backend treats omitted and explicit-null `display_name` equivalently, so that distinction is not required for this parity gate.
+
+Generator options are recorded in `openapi-generator-config.json`; provenance, the pinned JAR checksum, and adoption limits are in `THIRD_PARTY.md`.
 
 ## Development
 
-`Flutter Auth Core CI` pins Flutter `3.47.0` and runs formatting, analysis, tests, and a dependency snapshot. `OpenAPI Dart Parity CI` additionally exports backend OpenAPI, generates/builds/analyzes the ephemeral Dart client, and runs the parity verifier. The module remains EXPERIMENTAL until Android/iOS device integration, reviewed generated-client runtime integration, broader failure-path coverage, and a production-like pilot are complete.
+`Flutter Auth Core CI` pins Flutter `3.47.0` and runs formatting, analysis, tests, and a dependency snapshot. `OpenAPI Dart Parity CI` additionally exports backend OpenAPI, checksum-verifies the pinned generator JAR, generates/builds/analyzes the ephemeral Dart client, and runs the parity verifier. The module remains EXPERIMENTAL until Android/iOS device integration, reviewed generated-client runtime integration, broader failure-path coverage, and a production-like pilot are complete.
