@@ -66,6 +66,7 @@ DevForge invokes the published CLI JAR with the committed `openapi-generator-con
 - the current backend OpenAPI document does not declare a `servers` entry, so generated `dart-dio` output falls back to `http://localhost`; this is another reason the generated transport must not be used directly for production credentials
 - the proof uses the stable `built_value` serialization path; optional/patch-only generator modes were deliberately not enabled because that combination produced invalid generated BuiltValue code for the nullable profile PATCH field in this version
 - the backend currently treats omitted and explicit-null `display_name` as the same value, so the parity proof does not require generated absent-vs-null PATCH semantics
+- raw `dart-dio` output currently emits a small set of generator-origin analyzer warnings such as unused imports; CI reports those warnings but fails on analyzer errors, while handwritten `flutter-auth-core` keeps its stricter warning-free analysis gate
 
 ### Security and adoption limits
 
@@ -74,7 +75,7 @@ DevForge invokes the published CLI JAR with the committed `openapi-generator-con
 - generated runtime dependencies such as Dio/built-value tooling are transient CI proof dependencies here; this review does not automatically approve them for a shipped product
 - mobile opaque session credentials must continue to use reviewed platform secure storage and the DevForge revocation/TLS/error-handling rules
 - generator version, generator type, serialization strategy, or generated-runtime adoption requires compatibility/security review
-- CI fails if checksum/version verification, generation, serializer build, Dart analysis, or contract parity fails
+- CI fails if checksum/version verification, generation, serializer build, analyzer errors, or contract parity fails; generator-origin warnings remain visible in logs for review
 
 ### Attribution
 
