@@ -19,9 +19,7 @@ final class DevForgeMobileAuthClient {
        _sessionVault = sessionVault,
        _transport = transport ?? const IoAuthHttpTransport();
 
-  static final RegExp _publicErrorCodePattern = RegExp(
-    r'[a-z][a-z0-9_]{0,63}',
-  );
+  static final RegExp _publicErrorCodePattern = RegExp(r'[a-z][a-z0-9_]{0,63}');
 
   final Uri _baseUrl;
   final SecureSessionVault _sessionVault;
