@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real-backend": "playwright test -c playwright.real-backend.config.ts"
   },
   "dependencies": {
     "@niwar-devforge/web-bff-core": "file:../../packages/web-bff-core",
