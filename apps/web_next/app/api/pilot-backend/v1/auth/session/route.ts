@@ -1,6 +1,7 @@
 import {
   bearerToken,
   issuePilotSession,
+  pilotBackendEnabled,
   revokePilotSession,
 } from "../../../../../../lib/pilot-backend";
 
@@ -9,7 +10,13 @@ export const runtime = "nodejs";
 
 const noStoreHeaders = { "cache-control": "no-store", pragma: "no-cache" };
 
+function disabledResponse(): Response {
+  return new Response(null, { status: 404, headers: noStoreHeaders });
+}
+
 export async function POST(request: Request): Promise<Response> {
+  if (!pilotBackendEnabled()) return disabledResponse();
+
   let payload: unknown;
   try {
     payload = await request.json();
@@ -47,6 +54,8 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
+  if (!pilotBackendEnabled()) return disabledResponse();
+
   const token = bearerToken(request);
   if (!token || !revokePilotSession(token)) {
     return Response.json(
