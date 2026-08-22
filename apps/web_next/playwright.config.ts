@@ -22,6 +22,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       NODE_ENV: "production",
+      DEVFORGE_PILOT_INPROCESS_BACKEND: "1",
       DEVFORGE_PILOT_TEST_CONTROL: "1",
       DEVFORGE_PILOT_PUBLIC_ORIGIN: baseURL,
       DEVFORGE_PILOT_BACKEND_API_BASE_URL: `${baseURL}/api/pilot-backend/v1`,
