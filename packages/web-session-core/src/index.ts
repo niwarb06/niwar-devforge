@@ -159,29 +159,11 @@ export function createWebSessionMonitor<TProfile = Record<string, unknown>>(
   let started = false;
   let requestGeneration = 0;
   let activeController: AbortController | null = null;
-  let scheduled = false;
-  let scheduledSource: WebSessionSource | null = null;
 
   const emit = (next: WebSessionSnapshot<TProfile>): WebSessionSnapshot<TProfile> => {
     snapshot = next;
     config.onChange(next);
     return next;
-  };
-
-  const schedule = (source: WebSessionSource): void => {
-    scheduledSource = source === "bfcache" ? "bfcache" : (scheduledSource ?? source);
-    if (scheduled) {
-      return;
-    }
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      const sourceToRun = scheduledSource ?? "manual";
-      scheduledSource = null;
-      if (started) {
-        void performRevalidation(sourceToRun);
-      }
-    });
   };
 
   const performRevalidation = async (
@@ -268,12 +250,12 @@ export function createWebSessionMonitor<TProfile = Record<string, unknown>>(
   };
 
   const onPageShow = (event: BrowserEventLike): void => {
-    schedule(event.persisted === true ? "bfcache" : "pageshow");
+    void performRevalidation(event.persisted === true ? "bfcache" : "pageshow");
   };
 
   const onVisibilityChange = (): void => {
     if (visibilitySource?.visibilityState === "visible") {
-      schedule("visible");
+      void performRevalidation("visible");
     }
   };
 
@@ -286,7 +268,7 @@ export function createWebSessionMonitor<TProfile = Record<string, unknown>>(
       eventTarget?.addEventListener("pageshow", onPageShow);
       visibilitySource?.addEventListener("visibilitychange", onVisibilityChange);
       if (revalidateOnStart) {
-        schedule("start");
+        void performRevalidation("start");
       }
     },
 
@@ -300,7 +282,6 @@ export function createWebSessionMonitor<TProfile = Record<string, unknown>>(
       requestGeneration += 1;
       activeController?.abort();
       activeController = null;
-      scheduledSource = null;
     },
 
     current(): WebSessionSnapshot<TProfile> {
