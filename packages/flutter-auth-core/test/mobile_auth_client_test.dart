@@ -181,6 +181,41 @@ void main() {
   );
 
   test(
+    'malformed successful login revokes a valid-looking unpersisted token',
+    () async {
+      const token = 'opaque-malformed-session-token-123456789';
+      final vault = memoryVault();
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(200, <String, Object?>{
+          'session_token': token,
+          'token_type': 'unexpected',
+          'expires_in_seconds': 3600,
+        }),
+        const AuthHttpResponse(
+          statusCode: 204,
+          headers: <String, String>{},
+          body: '',
+        ),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
+
+      await expectLater(
+        client.login(identifier: 'user@example.test', password: 'password'),
+        throwsA(isA<InvalidAuthResponse>()),
+      );
+
+      expect(await vault.read(), isNull);
+      expect(transport.requests, hasLength(2));
+      expect(transport.requests.last.method, 'DELETE');
+      expect(transport.requests.last.headers['Authorization'], 'Bearer $token');
+    },
+  );
+
+  test(
     'authenticated profile reads translate secure token to bearer server call',
     () async {
       const token = 'opaque-mobile-session-token-abcdefghi';
@@ -296,6 +331,7 @@ void main() {
         throwsA(isA<InvalidAuthResponse>()),
       );
       expect(await vault.read(), isNull);
+      expect(transport.requests, hasLength(1));
     },
   );
 
@@ -341,6 +377,65 @@ void main() {
       expect(localClient, isA<DevForgeMobileAuthClient>());
     },
   );
+
+  test('base URL validation errors do not echo embedded secrets', () {
+    const secret = 'do-not-echo-this-secret';
+    Object? error;
+
+    try {
+      DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse(
+          'https://user:$secret@api.example.test/api/v1?token=$secret',
+        ),
+        sessionVault: memoryVault(),
+      );
+    } on Object catch (caught) {
+      error = caught;
+    }
+
+    expect(error, isA<ArgumentError>());
+    expect(error.toString(), isNot(contains(secret)));
+  });
+
+  test('unsafe public error metadata is replaced with bounded defaults', () async {
+    const secret = 'credential-like-value';
+    final transport = QueueTransport(<AuthHttpResponse>[
+      AuthHttpResponse(
+        statusCode: 429,
+        headers: const <String, String>{
+          'content-type': 'application/json',
+          'retry-after': '999999999',
+        },
+        body: jsonEncode(<String, Object?>{
+          'code': 'invalid\n$secret',
+          'message': null,
+        }),
+      ),
+    ]);
+    final client = DevForgeMobileAuthClient(
+      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+      sessionVault: memoryVault(),
+      transport: transport,
+    );
+
+    await expectLater(
+      client.register(email: 'new@example.test', password: 'password'),
+      throwsA(
+        isA<AuthApiException>()
+            .having((error) => error.code, 'code', 'request_failed')
+            .having(
+              (error) => error.retryAfterSeconds,
+              'retryAfterSeconds',
+              isNull,
+            )
+            .having(
+              (error) => error.toString(),
+              'toString',
+              isNot(contains(secret)),
+            ),
+      ),
+    );
+  });
 
   test('API exceptions do not echo upstream error bodies or credentials', () {
     const error = AuthApiException(
