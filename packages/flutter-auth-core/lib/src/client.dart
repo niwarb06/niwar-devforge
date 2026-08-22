@@ -20,7 +20,7 @@ final class DevForgeMobileAuthClient {
        _transport = transport ?? const IoAuthHttpTransport();
 
   static final RegExp _publicErrorCodePattern = RegExp(
-    r'^[a-z][a-z0-9_]{0,63}$',
+    r'[a-z][a-z0-9_]{0,63}',
   );
 
   final Uri _baseUrl;
@@ -278,13 +278,17 @@ final class DevForgeMobileAuthClient {
     return Map<String, Object?>.from(decoded);
   }
 
+  static bool _isPublicErrorCode(String value) {
+    final match = _publicErrorCodePattern.matchAsPrefix(value);
+    return match != null && match.end == value.length;
+  }
+
   static AuthApiException _apiException(AuthHttpResponse response) {
     var code = 'request_failed';
     try {
       final json = _decodeObject(response.body);
       final parsedCode = json['code'];
-      if (parsedCode is String &&
-          _publicErrorCodePattern.hasMatch(parsedCode)) {
+      if (parsedCode is String && _isPublicErrorCode(parsedCode)) {
         code = parsedCode;
       }
     } on Object {
@@ -292,7 +296,8 @@ final class DevForgeMobileAuthClient {
     }
 
     final parsedRetryAfter = int.tryParse(response.header('retry-after') ?? '');
-    final retryAfter = parsedRetryAfter != null &&
+    final retryAfter =
+        parsedRetryAfter != null &&
             parsedRetryAfter > 0 &&
             parsedRetryAfter <= 86_400
         ? parsedRetryAfter
