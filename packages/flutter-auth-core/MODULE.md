@@ -56,6 +56,9 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 - the default transport refuses redirects
 - response bodies are size bounded
 - login response session tokens are persisted to secure storage before login completes and are not returned to application UI state
+- a valid existing local session blocks another login so the previous server session is not silently orphaned
+- if secure persistence of a newly created backend session fails, the client immediately attempts server-side revocation of the unpersisted token and returns a sanitized storage error
+- secure-storage provider read/write/clear failures exposed through the client are mapped to sanitized error codes
 - secure storage records include explicit expiry; malformed/expired records are deleted
 - `401` on protected requests clears stale local session state
 - logout keeps the secure token when server revocation cannot be confirmed, enabling a retry instead of silently orphaning a still-active server session
@@ -68,11 +71,13 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 
 CI must run:
 
+- clean dependency resolution
 - `dart format` verification
 - `flutter analyze`
 - `flutter test`
+- dependency snapshot
 
-Tests cover secure session persistence/expiry, token non-exposure in login results, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, and sanitized exception strings.
+CI setup actions are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, and sanitized exception strings.
 
 ## Current promotion blockers
 
@@ -84,4 +89,4 @@ Tests cover secure session persistence/expiry, token non-exposure in login resul
 
 ## Upgrade notes
 
-Changes to secure-storage keys, backend session response shape, TLS policy, logout semantics, or the storage provider require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
+Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, logout semantics, or the storage provider require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
