@@ -1,5 +1,6 @@
 import {
   bearerToken,
+  pilotBackendEnabled,
   pilotProfileForToken,
 } from "../../../../../../lib/pilot-backend";
 
@@ -9,6 +10,10 @@ export const runtime = "nodejs";
 const noStoreHeaders = { "cache-control": "no-store", pragma: "no-cache" };
 
 export async function GET(request: Request): Promise<Response> {
+  if (!pilotBackendEnabled()) {
+    return new Response(null, { status: 404, headers: noStoreHeaders });
+  }
+
   const token = bearerToken(request);
   const profile = token ? pilotProfileForToken(token) : null;
   if (!profile) {
