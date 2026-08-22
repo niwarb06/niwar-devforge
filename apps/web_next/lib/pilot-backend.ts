@@ -25,6 +25,13 @@ const globalState = globalThis as typeof globalThis & {
   __devforgePilotBackendState?: PilotBackendState;
 };
 
+export function pilotBackendEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" ||
+    process.env.DEVFORGE_PILOT_INPROCESS_BACKEND === "1"
+  );
+}
+
 function state(): PilotBackendState {
   globalState.__devforgePilotBackendState ??= {
     sessions: new Set<string>(),
