@@ -53,10 +53,13 @@ Session tokens are opaque. Only token digests are persisted.
 
 - global `user`: self-profile read/write
 - global `admin`: privileged wildcard; assignment is server-side guarded
-- tenant `member`: tenant read plus self-profile permissions
-- tenant `owner`: tenant read/write and membership management
-- privileged role mutation requires `roles.manage`
+- tenant membership `member` maps to policy role `tenant:member`
+- tenant membership `owner` maps to policy role `tenant:owner`
+- `tenant:member`: tenant read plus self-profile permissions
+- `tenant:owner`: tenant read/write and membership management
+- privileged global-role mutation requires `roles.manage`
 - tenant operations require an active tenant and active membership unless the actor is a global admin
+- tenant membership roles are validated server-side and kept separate from global role names
 - authorization defaults to deny when a permission or role is unknown
 
 ## Security
@@ -66,7 +69,8 @@ Session tokens are opaque. Only token digests are persisted.
 - Disabled users cannot resolve active sessions.
 - Roles are persisted server-side; client-provided role state is not authoritative.
 - Tenant authorization validates active tenant boundaries and active memberships.
-- Global admins cannot bypass a missing/disabled tenant boundary.
+- Tenant-scoped roles are namespaced so membership roles cannot be mistaken for global roles.
+- Global admins cannot bypass a missing or disabled tenant boundary.
 - Web/mobile credential transport is intentionally outside this module and must follow `docs/16_AUTH_CORE_DECISION.md`.
 - Authentication and authorization failures must not leak secrets or credentials.
 - Production secrets and database passwords must be supplied outside source control.
@@ -77,7 +81,7 @@ FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, and denial of cross-tenant or over-privileged access. The module remains EXPERIMENTAL until broader integration, failure-path, migration, generated-client, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. The module remains EXPERIMENTAL until broader integration, failure-path, migration, generated-client, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
