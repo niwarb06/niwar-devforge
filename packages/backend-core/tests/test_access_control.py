@@ -9,7 +9,7 @@ from devforge_core.auth.contracts import Actor
 from devforge_core.auth.errors import AuthorizationDenied
 from devforge_core.auth.models import Base, Tenant, TenantMembership, User
 from devforge_core.auth.permissions import default_authorization_policy
-from devforge_core.auth.roles import RoleAssignmentService, SqlAlchemyRoleRepository
+from devforge_core.auth.roles import InvalidRole, RoleAssignmentService, SqlAlchemyRoleRepository
 from devforge_core.auth.tenancy import SqlAlchemyTenantAccessRepository, TenantAuthorizationService
 
 
@@ -46,7 +46,11 @@ def test_role_assignment_requires_privileged_actor() -> None:
             service.assign(user_actor, target.id, "admin")
 
         service.assign(admin_actor, target.id, "admin")
+        service.assign(admin_actor, target.id, "admin")
         assert service.roles.list_for_user(target.id) == ("admin",)
+
+        with pytest.raises(InvalidRole):
+            service.revoke(admin_actor, target.id, "user")
 
 
 def test_tenant_authorization_denies_cross_tenant_access() -> None:
@@ -82,9 +86,28 @@ def test_tenant_authorization_denies_cross_tenant_access() -> None:
             service.require_access(actor, tenant_a.id, "tenant.write")
 
 
-def test_tenant_owner_has_scoped_write_but_not_global_admin() -> None:
+def test_tenant_roles_are_namespaced_from_global_roles() -> None:
     policy = default_authorization_policy()
-    owner = Actor(id=uuid4(), email="owner@example.com", display_name=None, roles=("owner",))
+    global_owner = Actor(id=uuid4(), email=None, display_name=None, roles=("owner",))
+    tenant_owner = Actor(id=uuid4(), email=None, display_name=None, roles=("tenant:owner",))
 
-    assert policy.allows(owner, "tenant.write") is True
-    assert policy.allows(owner, "roles.manage") is False
+    assert policy.allows(global_owner, "tenant.write") is False
+    assert policy.allows(tenant_owner, "tenant.write") is True
+    assert policy.allows(tenant_owner, "roles.manage") is False
+
+
+def test_global_admin_cannot_bypass_inactive_tenant_boundary() -> None:
+    with make_db() as db:
+        tenant = Tenant(slug="disabled", name="Disabled", is_active=False)
+        db.add(tenant)
+        db.commit()
+        db.refresh(tenant)
+
+        admin = Actor(id=uuid4(), email="admin@example.com", display_name=None, roles=("admin",))
+        service = TenantAuthorizationService(
+            tenants=SqlAlchemyTenantAccessRepository(db),
+            authorization=default_authorization_policy(),
+        )
+
+        with pytest.raises(AuthorizationDenied):
+            service.require_access(admin, tenant.id, "tenant.read")
