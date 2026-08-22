@@ -4,10 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:niwar_devforge_flutter_auth/niwar_devforge_flutter_auth.dart';
 
 final class MemorySecretStore implements SecretStore {
+  MemorySecretStore({this.failWrites = false});
+
+  final bool failWrites;
   final Map<String, String> values = <String, String>{};
 
   @override
   Future<void> write({required String key, required String value}) async {
+    if (failWrites) {
+      throw StateError('simulated secure storage failure');
+    }
     values[key] = value;
   }
 
@@ -106,6 +112,70 @@ void main() {
       expect(transport.requests.single.uri.path, '/api/v1/auth/session');
     },
   );
+
+  test('login refuses to replace an already active local session', () async {
+    final vault = memoryVault();
+    await vault.save(
+      token: 'opaque-existing-session-token-123456',
+      expiresIn: const Duration(hours: 1),
+    );
+    final transport = QueueTransport(const <AuthHttpResponse>[]);
+    final client = DevForgeMobileAuthClient(
+      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+      sessionVault: vault,
+      transport: transport,
+    );
+
+    await expectLater(
+      client.login(identifier: 'other@example.test', password: 'password'),
+      throwsA(
+        isA<AuthSessionStateException>().having(
+          (error) => error.code,
+          'code',
+          'already_authenticated',
+        ),
+      ),
+    );
+    expect(transport.requests, isEmpty);
+  });
+
+  test('failed secure persistence attempts immediate server revocation', () async {
+    const token = 'opaque-new-session-token-storage-fail-123';
+    final vault = SecureSessionVault(MemorySecretStore(failWrites: true));
+    final transport = QueueTransport(<AuthHttpResponse>[
+      jsonResponse(200, <String, Object?>{
+        'session_token': token,
+        'token_type': 'bearer',
+        'expires_in_seconds': 3600,
+      }),
+      const AuthHttpResponse(
+        statusCode: 204,
+        headers: <String, String>{},
+        body: '',
+      ),
+    ]);
+    final client = DevForgeMobileAuthClient(
+      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+      sessionVault: vault,
+      transport: transport,
+    );
+
+    await expectLater(
+      client.login(identifier: 'user@example.test', password: 'password'),
+      throwsA(
+        isA<AuthSessionStorageException>().having(
+          (error) => error.code,
+          'code',
+          'secure_storage_write_failed',
+        ),
+      ),
+    );
+
+    expect(transport.requests, hasLength(2));
+    expect(transport.requests.last.method, 'DELETE');
+    expect(transport.requests.last.uri.path, '/api/v1/auth/session');
+    expect(transport.requests.last.headers['Authorization'], 'Bearer $token');
+  });
 
   test(
     'authenticated profile reads translate secure token to bearer server call',
