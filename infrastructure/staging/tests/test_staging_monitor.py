@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,7 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "observability" / "staging_m
 spec = importlib.util.spec_from_file_location("staging_monitor", MODULE_PATH)
 assert spec and spec.loader
 monitor = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = monitor
 spec.loader.exec_module(monitor)
 
 
