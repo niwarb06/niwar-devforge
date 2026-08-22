@@ -27,3 +27,14 @@ DevForge uses the public key/value secure-storage API through `FlutterSecureStor
 ### Attribution
 
 The upstream BSD-3-Clause license and notices must be preserved where redistribution rules require them. This review records provenance; it is not a substitute for product release-license checks.
+
+## subosito/flutter-action
+
+- Use: CI-only Flutter SDK setup for `Flutter Auth Core CI`
+- Upstream repository: `https://github.com/subosito/flutter-action`
+- Pinned revision: `1a449444c387b1966244ae4d4f8c696479add0b2`
+- License: MIT
+- Review date: 2026-08-22
+- Decision: APPROVED FOR EXPERIMENTAL CI USE at the pinned revision
+
+The workflow does not track a floating `@v2` reference. The action is pinned to the reviewed commit so upstream tag movement cannot silently change the CI executable. No action source code is copied into the DevForge repository.
