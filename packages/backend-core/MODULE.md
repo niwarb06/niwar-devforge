@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Provides the reusable backend foundation for configuration, database access, health checks, request context, structured logging, identity persistence, password hashing, opaque sessions, role-based authorization, tenant access boundaries, user profiles, typed API contracts, authenticated API transport primitives, and credential abuse protection.
+Provides the reusable backend foundation for configuration, database access, health checks, request context, structured logging, identity persistence, password hashing, opaque sessions, role-based authorization, tenant access boundaries, user profiles, typed API contracts, authenticated API transport primitives, credential abuse protection, and trusted-proxy-aware client address resolution.
 
 ## Dependencies
 
@@ -22,6 +22,7 @@ All runtime settings use the `DEVFORGE_` environment prefix. Production and shar
 - `DEVFORGE_CREDENTIAL_RATE_LIMIT_WINDOW_SECONDS` controls the fixed credential-abuse window.
 - `DEVFORGE_LOGIN_IP_LIMIT` / `DEVFORGE_LOGIN_IDENTIFIER_LIMIT` control login attempts per window.
 - `DEVFORGE_REGISTER_IP_LIMIT` / `DEVFORGE_REGISTER_IDENTIFIER_LIMIT` control registration attempts per window.
+- `DEVFORGE_TRUSTED_PROXY_CIDRS` is a JSON list of network CIDRs whose direct connections may supply a sanitized `X-Forwarded-For` chain. It defaults to `[]`; catch-all `/0` trust is rejected.
 
 ## Public Interfaces
 
@@ -34,6 +35,7 @@ All runtime settings use the `DEVFORGE_` environment prefix. Production and shar
 - `Argon2Hasher`
 - `DatabaseSessionIssuer`
 - `RedisFixedWindowRateLimiter`
+- `resolve_client_address()` trusted-proxy-aware address resolver
 - `RolePermissionPolicy` and `default_authorization_policy()`
 - guarded `RoleAssignmentService`
 - tenant-scoped `TenantAuthorizationService`
@@ -84,9 +86,10 @@ Session tokens are opaque. Only token digests are persisted.
 - Tenant authorization validates active tenant boundaries and active memberships.
 - Tenant-scoped roles are namespaced so membership roles cannot be mistaken for global roles.
 - Global admins cannot bypass a missing or disabled tenant boundary.
-- Login and registration are rate-limited with separate SHA-256 buckets for the direct client address and normalized identifier; plaintext client addresses and email/identifier values are not used in Redis keys.
+- Login and registration are rate-limited with separate SHA-256 buckets for the resolved client address and normalized identifier; plaintext addresses and identifiers are not used in Redis keys.
 - Credential rate limiting fails closed with a generic `503 temporarily_unavailable` response if the Redis abuse-control backend is unavailable.
-- The core does not trust `X-Forwarded-For` by default; reverse-proxy deployments must establish trusted-proxy handling at the deployment boundary before using forwarded client addresses.
+- `X-Forwarded-For` is ignored unless the immediate peer belongs to `DEVFORGE_TRUSTED_PROXY_CIDRS`; the trusted chain is walked right-to-left and malformed chains fall back to the direct peer.
+- Catch-all trusted proxy networks are rejected so forwarding metadata cannot be made globally authoritative by configuration accident.
 - Duplicate registration uses a generic public error rather than exposing the persisted email-existence condition.
 - Credential responses are marked `Cache-Control: no-store`.
 - The `DevForgeSession` bearer scheme is for mobile/API/server-to-server transport. Browser JavaScript must not receive or persist opaque session credentials; web products use the server-mediated BFF + Secure/HttpOnly cookie design from `docs/16_AUTH_CORE_DECISION.md`.
@@ -94,14 +97,16 @@ Session tokens are opaque. Only token digests are persisted.
 - Authentication and authorization failures use generic typed API errors and must not leak secrets or credentials.
 - Production secrets and database passwords must be supplied outside source control.
 
+See `docs/17_TRUSTED_PROXY_CLIENT_ADDRESS.md` for the deployment contract.
+
 ## OpenAPI and Generated Clients
 
 FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.md`. CI exports the schema on every backend-core change. Authenticated profile/logout plus credential registration/session routes provide concrete contracts for downstream client-generation proof. Web/mobile generators must be approved and version-pinned before generated clients are promoted to reusable status.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. The module remains EXPERIMENTAL until web BFF transport, trusted-proxy deployment policy, Flutter client proof, broader failure-path coverage, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. Client-address tests cover untrusted spoof rejection, trusted multi-hop resolution, malformed-chain fallback, CIDR normalization, and catch-all trust rejection. The module remains EXPERIMENTAL until topology-specific trusted-proxy deployment evidence, Flutter client proof, broader failure-path coverage, browser-history integration, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
-Changes to auth contracts, persisted identity/session/role/tenant schema, session lifetime defaults, credential rate-limit defaults, session transport, permission names, OpenAPI contracts, or migration history require explicit compatibility and rollback review before promotion to TRUSTED.
+Changes to auth contracts, persisted identity/session/role/tenant schema, session lifetime defaults, credential rate-limit defaults, trusted-proxy/client-address policy, session transport, permission names, OpenAPI contracts, or migration history require explicit compatibility and rollback review before promotion to TRUSTED.
