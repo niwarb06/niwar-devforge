@@ -1,0 +1,12 @@
+{
+  "disallowAdditionalPropertiesIfNotPresent": false,
+  "hideGenerationTimestamp": true,
+  "patchOnly": true,
+  "pubDescription": "Ephemeral generated DevForge API contract proof. Not a published runtime client.",
+  "pubLibrary": "devforge_api_contract_proof",
+  "pubName": "devforge_api_contract_proof",
+  "pubPublishTo": "none",
+  "pubVersion": "0.1.0",
+  "serializationLibrary": "built_value",
+  "useOptional": true
+}
