@@ -12,6 +12,20 @@ python scripts/export_openapi.py --output build/openapi.json
 
 The exporter sorts JSON keys and writes a deterministic UTF-8 document suitable for CI artifacts and downstream client generators.
 
+## Current TypeScript proof
+
+Backend Core CI currently performs an **experimental, generation-only proof** with `openapi-typescript` version `7.13.0`. The CLI consumes the exported schema and must produce TypeScript declarations containing the protected profile routes and `UserProfileResponse` contract.
+
+Provenance for this CI-only tool:
+
+- package: `openapi-typescript@7.13.0`
+- upstream: `https://github.com/openapi-ts/openapi-typescript`
+- license: MIT
+- role: build-time schema-to-TypeScript declaration proof only
+- no generated authentication secret, token, or runtime credential is committed
+
+The version is explicitly pinned in CI. This proof does **not** yet promote a reusable TypeScript client package; a product/client package must add its own dependency lockfile, platform tests, and transport adapter before promotion.
+
 ## Client generation
 
 Generated web/mobile clients must be produced from the exported schema rather than handwritten duplicate request/response models.
@@ -22,6 +36,8 @@ Recommended adapters:
 - Flutter/Dart: an approved OpenAPI Dart generator behind the DevForge API-client package boundary.
 
 Generator choice and version must be pinned before generated code is promoted into a reusable module. Generated output must pass its platform lint/type/build checks and must not replace server-side authorization.
+
+For web products, generated TypeScript code is a contract/client layer only. Browser JavaScript must not receive DevForge opaque bearer-session credentials; web authentication remains server-mediated through the BFF + Secure/HttpOnly cookie design. Mobile/API clients may use the documented bearer transport with credentials stored in platform secure storage.
 
 ## Compatibility
 

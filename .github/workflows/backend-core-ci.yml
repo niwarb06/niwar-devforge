@@ -55,6 +55,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
       - name: Install backend core
         run: pip install -e ".[dev]"
 
@@ -71,6 +75,16 @@ jobs:
         run: |
           python scripts/export_openapi.py --output /tmp/devforge-openapi.json
           python -c 'import json; s=json.load(open("/tmp/devforge-openapi.json")); assert s["openapi"]; assert s["info"]["title"]'
+
+      - name: TypeScript contract generation proof
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npx --yes --package=openapi-typescript@7.13.0 openapi-typescript \
+            /tmp/devforge-openapi.json -o /tmp/devforge-openapi.d.ts
+          grep -q 'UserProfileResponse' /tmp/devforge-openapi.d.ts
+          grep -q '"/api/v1/users/me"' /tmp/devforge-openapi.d.ts
+          grep -q '"/api/v1/auth/session"' /tmp/devforge-openapi.d.ts
 
       - name: Tests
         run: pytest --cov=devforge_core --cov-report=term-missing
