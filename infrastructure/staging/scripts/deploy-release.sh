@@ -7,7 +7,7 @@ registry_user="${3:?usage: deploy-release.sh <release.env> <backup-dir> <registr
 
 test -f "$release_env"
 [[ "$backup_dir" =~ ^/[A-Za-z0-9._/-]+$ ]]
-[[ "$backup_dir" != *"/../"* ]]
+[[ ! "$backup_dir" =~ (^|/)\.\.($|/) ]]
 [[ "$registry_user" =~ ^[A-Za-z0-9._-]+$ ]]
 
 set -a
@@ -34,7 +34,22 @@ fi
 
 docker compose --env-file "$release_env" -f infrastructure/staging/compose.yml pull backend web
 docker compose --env-file "$release_env" -f infrastructure/staging/compose.yml up -d --no-build
-bash infrastructure/staging/scripts/healthcheck.sh
+
+healthy=0
+for attempt in $(seq 1 60); do
+  if bash infrastructure/staging/scripts/healthcheck.sh; then
+    healthy=1
+    break
+  fi
+  sleep 2
+done
+
+if [ "$healthy" != "1" ]; then
+  docker compose --env-file "$release_env" -f infrastructure/staging/compose.yml ps >&2 || true
+  docker compose --env-file "$release_env" -f infrastructure/staging/compose.yml logs --no-color --tail=200 >&2 || true
+  printf 'staging did not become healthy after deployment\n' >&2
+  exit 1
+fi
 
 docker logout ghcr.io >/dev/null 2>&1 || true
 cleanup
