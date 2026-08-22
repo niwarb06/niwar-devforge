@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .contracts import Actor, LoginCommand, RegisterCommand
+from .errors import InvalidCredentials, PasswordPolicyViolation
 
 
 class PasswordHasher(Protocol):
@@ -27,17 +28,20 @@ class AuthService:
     sessions: SessionIssuer
 
     async def register(self, command: RegisterCommand) -> Actor:
-        password_hash = self.passwords.hash(command.password)
+        try:
+            password_hash = self.passwords.hash(command.password)
+        except ValueError as exc:
+            raise PasswordPolicyViolation(str(exc)) from exc
         return await self.users.create(command, password_hash)
 
     async def login(self, command: LoginCommand) -> tuple[Actor, str]:
         record = await self.users.get_by_identifier(command.identifier)
         if record is None:
-            raise ValueError("invalid_credentials")
+            raise InvalidCredentials()
 
         actor, password_hash = record
         if not self.passwords.verify(command.password, password_hash):
-            raise ValueError("invalid_credentials")
+            raise InvalidCredentials()
 
         session_id = await self.sessions.issue(actor)
         return actor, session_id
