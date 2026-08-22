@@ -115,8 +115,12 @@ jobs:
       - name: Install Chromium proof harness
         working-directory: .generated/staging-e2e
         run: |
-          npm install --no-save playwright@1.55.0
+          npm install --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
+
+      - name: Audit browser proof harness
+        working-directory: .generated/staging-e2e
+        run: npm audit --audit-level=high
 
       - name: Build staging images
         run: docker compose -f infrastructure/staging/compose.yml build backend web
