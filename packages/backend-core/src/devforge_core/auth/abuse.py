@@ -63,7 +63,7 @@ class RedisFixedWindowRateLimiter:
                 _FIXED_WINDOW_SCRIPT,
                 1,
                 key,
-                window_seconds,
+                str(window_seconds),
             )
             if not isinstance(raw_result, (list, tuple)) or len(raw_result) != 2:
                 raise TypeError("unexpected_rate_limit_result")
