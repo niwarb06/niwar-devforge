@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -18,7 +18,7 @@ from .errors import permission_denied, resource_not_found
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-_ERROR_RESPONSES = {
+_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorResponse},
     403: {"model": ErrorResponse},
     404: {"model": ErrorResponse},
