@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: list[str] = Field(default_factory=list)
     log_level: str = "INFO"
+    session_ttl_minutes: int = Field(default=10_080, ge=5, le=43_200)
 
     @property
     def is_production(self) -> bool:
