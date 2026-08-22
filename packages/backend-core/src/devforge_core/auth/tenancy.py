@@ -20,9 +20,12 @@ class SqlAlchemyTenantAccessRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def resolve_membership(self, user_id: UUID, tenant_id: UUID) -> TenantContext | None:
+    def tenant_is_active(self, tenant_id: UUID) -> bool:
         tenant = self._db.get(Tenant, tenant_id)
-        if tenant is None or not tenant.is_active:
+        return tenant is not None and tenant.is_active
+
+    def resolve_membership(self, user_id: UUID, tenant_id: UUID) -> TenantContext | None:
+        if not self.tenant_is_active(tenant_id):
             return None
         membership = self._db.scalar(
             select(TenantMembership).where(
@@ -42,6 +45,9 @@ class TenantAuthorizationService:
     authorization: RolePermissionPolicy
 
     def require_access(self, actor: Actor, tenant_id: UUID, permission: str) -> TenantContext:
+        if not self.tenants.tenant_is_active(tenant_id):
+            raise AuthorizationDenied()
+
         if self.authorization.allows(actor, "*"):
             return TenantContext(tenant_id=tenant_id, membership_role="admin")
 
