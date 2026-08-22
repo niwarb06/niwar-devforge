@@ -55,6 +55,14 @@ class StagingMonitorTests(unittest.TestCase):
         self.thread.join(timeout=2)
         self.temp.cleanup()
 
+    def test_initial_healthy_state_is_quiet(self) -> None:
+        self.assertTrue(
+            monitor.run_once(self.config, probe=lambda _origin: (True, "status:200"))
+        )
+        self.assertEqual(_SinkHandler.payloads, [])
+        state = json.loads(self.config.state_file.read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "healthy")
+
     def test_failure_deduplicates_and_recovery_resolves(self) -> None:
         self.assertFalse(
             monitor.run_once(self.config, probe=lambda _origin: (False, "status:503"))
