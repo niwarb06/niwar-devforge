@@ -74,7 +74,10 @@ final class IoAuthHttpTransport implements AuthHttpTransport {
         responseHeaders[name.toLowerCase()] = values.join(',');
       });
 
-      final responseBody = utf8.decode(bytes.takeBytes(), allowMalformed: false);
+      final responseBody = utf8.decode(
+        bytes.takeBytes(),
+        allowMalformed: false,
+      );
       return AuthHttpResponse(
         statusCode: response.statusCode,
         headers: Map.unmodifiable(responseHeaders),
