@@ -140,7 +140,7 @@ def test_login_failure_is_generic_for_wrong_credentials() -> None:
         assert response.json() == {"code": "invalid_credentials", "message": None}
 
 
-def test_rate_limit_identifier_keys_are_hashed_and_denial_sets_retry_after() -> None:
+def test_rate_limit_keys_hide_client_and_identifier_and_denial_sets_retry_after() -> None:
     with _make_db() as db:
         allowed = RecordingLimiter()
         client = _client_with_db(db, allowed)
@@ -149,6 +149,8 @@ def test_rate_limit_identifier_keys_are_hashed_and_denial_sets_retry_after() -> 
         assert response.status_code == 201
         assert len(allowed.calls) == 2
         assert all(email not in key for key, _limit, _window in allowed.calls)
+        assert all("testclient" not in key for key, _limit, _window in allowed.calls)
+        assert any(":ip:" in key for key, _limit, _window in allowed.calls)
         assert any(":identifier:" in key for key, _limit, _window in allowed.calls)
 
         denied = RecordingLimiter(allowed=False, retry_after_seconds=17)
