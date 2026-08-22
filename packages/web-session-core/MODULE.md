@@ -51,9 +51,11 @@ After successful login/logout or another authentication-changing action, product
 
 ## Integration evidence
 
-`apps/web_next` is the first real Next.js + Chromium reference integration. Its browser suite verifies login/logout, HttpOnly credential isolation, server-side revocation followed by browser back navigation, explicit BFCache-style `pageshow` revalidation, disabled-user rejection, and protected-DOM fail-closed behavior while session trust is being refreshed.
+`apps/web_next` is the first real Next.js + Chromium reference integration. Its deterministic browser suite verifies login/logout, HttpOnly credential isolation, server-side revocation followed by browser back navigation, explicit BFCache-style `pageshow` revalidation, disabled-user rejection, and protected-DOM fail-closed behavior while session trust is being refreshed.
 
-The reference app proves the framework/browser integration contract. Its in-process backend is deliberately test-only, so the evidence does not replace a real `backend-core` or production-like deployment pilot.
+A second Chromium suite runs the same browser session contract through the real BFF into FastAPI `backend-core` backed by PostgreSQL and Redis. That suite verifies authenticated state after real registration/login, profile reads and updates through the BFF, protected rendering, logout, cookie clearing, and continued token non-exposure with the simulator disabled.
+
+The reference therefore proves both the framework/browser lifecycle contract and real reusable-backend CI integration. It does not yet prove a production ingress/deployment topology.
 
 ## Tests / quality gate
 
@@ -69,7 +71,8 @@ The module must pass:
 - bounded-body regression
 - listener teardown regression
 - real Chromium reference-pilot coverage for protected history restoration and auth lifecycle
+- real-backend Chromium coverage against FastAPI `backend-core`, PostgreSQL, and Redis
 
 ## Promotion gates
 
-The real-browser Next.js reference integration is now proven. Promotion to BETA/TRUSTED still requires real `backend-core` integration, production-like BFF/ingress deployment evidence, generator-produced product proof, broader lifecycle/failure-path evidence in that environment, and repeated product reuse required by the DevForge module contract.
+The real-browser Next.js reference integration and real `backend-core` CI path are now covered. Promotion to BETA/TRUSTED still requires production-like BFF/ingress deployment evidence, exact trusted-proxy topology proof, generator-produced product proof, broader lifecycle/failure-path evidence in that environment, and repeated product reuse required by the DevForge module contract.
