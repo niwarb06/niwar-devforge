@@ -51,12 +51,18 @@ The backend must separately configure only the real BFF/proxy network ranges in 
 
 Browser history/session restoration orchestration lives separately in `@niwar-devforge/web-session-core`. Keeping that browser-safe package separate prevents server-only BFF configuration and credential-translation code from being bundled into client UI code.
 
+## Browser pilot evidence
+
+`apps/web_next` now composes this package with `web-session-core` through real Next.js App Router Route Handlers and Chromium/Playwright. The pilot verifies that browser login JSON does not contain the opaque session token, the cookie is HttpOnly, logout revokes/clears the session, back/history restoration revalidates before protected UI is trusted, disabled sessions become anonymous, and transient upstream failure is not misclassified as logout.
+
+The pilot uses a loopback test backend and an explicit localhost-only non-Secure cookie exception. It does not replace the production Secure `__Host-devforge_session` contract.
+
 ## Current limitations / promotion blockers
 
 - each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
-- framework-neutral browser history/BFCache revalidation is implemented in `web-session-core`, but a real generated Next.js application/browser integration proof is still required
-- no full generated Next.js application pilot yet
-- no production-like deployment evidence yet
+- the real Next.js browser reference pilot is complete, but a generator-produced product pilot is still required
+- production-like TLS + real backend/PostgreSQL/Redis integration evidence is still required
+- operational monitoring, rollback, and deployment evidence remain open
 
 The package must not be promoted to TRUSTED until those items are closed and the module contract quality gates are met.
 
@@ -76,3 +82,4 @@ CI must verify:
 - browser-supplied forwarding metadata is not relayed by default
 - trusted client-address resolver emits one validated IP when explicitly configured
 - invalid/multi-value resolver output fails closed before backend fetch
+- Next.js browser pilot exercises login/logout/history revalidation and protected-content gating
