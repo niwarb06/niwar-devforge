@@ -139,43 +139,46 @@ void main() {
     expect(transport.requests, isEmpty);
   });
 
-  test('failed secure persistence attempts immediate server revocation', () async {
-    const token = 'opaque-new-session-token-storage-fail-123';
-    final vault = SecureSessionVault(MemorySecretStore(failWrites: true));
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(200, <String, Object?>{
-        'session_token': token,
-        'token_type': 'bearer',
-        'expires_in_seconds': 3600,
-      }),
-      const AuthHttpResponse(
-        statusCode: 204,
-        headers: <String, String>{},
-        body: '',
-      ),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
-
-    await expectLater(
-      client.login(identifier: 'user@example.test', password: 'password'),
-      throwsA(
-        isA<AuthSessionStorageException>().having(
-          (error) => error.code,
-          'code',
-          'secure_storage_write_failed',
+  test(
+    'failed secure persistence attempts immediate server revocation',
+    () async {
+      const token = 'opaque-new-session-token-storage-fail-123';
+      final vault = SecureSessionVault(MemorySecretStore(failWrites: true));
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(200, <String, Object?>{
+          'session_token': token,
+          'token_type': 'bearer',
+          'expires_in_seconds': 3600,
+        }),
+        const AuthHttpResponse(
+          statusCode: 204,
+          headers: <String, String>{},
+          body: '',
         ),
-      ),
-    );
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    expect(transport.requests, hasLength(2));
-    expect(transport.requests.last.method, 'DELETE');
-    expect(transport.requests.last.uri.path, '/api/v1/auth/session');
-    expect(transport.requests.last.headers['Authorization'], 'Bearer $token');
-  });
+      await expectLater(
+        client.login(identifier: 'user@example.test', password: 'password'),
+        throwsA(
+          isA<AuthSessionStorageException>().having(
+            (error) => error.code,
+            'code',
+            'secure_storage_write_failed',
+          ),
+        ),
+      );
+
+      expect(transport.requests, hasLength(2));
+      expect(transport.requests.last.method, 'DELETE');
+      expect(transport.requests.last.uri.path, '/api/v1/auth/session');
+      expect(transport.requests.last.headers['Authorization'], 'Bearer $token');
+    },
+  );
 
   test(
     'authenticated profile reads translate secure token to bearer server call',
