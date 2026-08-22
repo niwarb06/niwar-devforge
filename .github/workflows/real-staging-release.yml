@@ -1,0 +1,348 @@
+name: Real Staging Release Gate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/real-staging-release.yml"
+      - "infrastructure/staging/**"
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Exact 40-character commit SHA already reachable from main"
+        required: true
+        type: string
+      confirm:
+        description: "Type DEPLOY-STAGING to authorize this staging deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: niwar-devforge-real-staging
+  cancel-in-progress: false
+
+jobs:
+  release-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
+
+      - name: Validate release-gate files
+        env:
+          SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
+          CONFIRM: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm || 'PR-VALIDATION' }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          bash -n infrastructure/staging/scripts/*.sh
+          node --check infrastructure/staging/staging-e2e.mjs
+
+          STAGING_HOST=staging.example.com \
+          STAGING_PUBLIC_ORIGIN=https://staging.example.com \
+          STAGING_POSTGRES_PASSWORD_FILE=/tmp/devforge-postgres-password \
+          STAGING_REDIS_PASSWORD_FILE=/tmp/devforge-redis-password \
+          STAGING_BACKEND_IMAGE=niwar-devforge/backend-staging:validation \
+          STAGING_WEB_IMAGE=niwar-devforge/web-staging:validation \
+            docker compose -f infrastructure/staging/compose.yml config --quiet
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$CONFIRM" = "DEPLOY-STAGING"
+            git fetch origin main
+            git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          fi
+
+  deploy-real-staging:
+    if: github.event_name == 'workflow_dispatch'
+    needs: release-contract
+    runs-on: ubuntu-24.04
+    environment:
+      name: staging
+      url: https://${{ vars.STAGING_HOST }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      CONFIRM: ${{ inputs.confirm }}
+      STAGING_HOST: ${{ vars.STAGING_HOST }}
+      STAGING_SSH_HOST: ${{ vars.STAGING_SSH_HOST }}
+      STAGING_SSH_PORT: ${{ vars.STAGING_SSH_PORT }}
+      STAGING_SSH_USER: ${{ vars.STAGING_SSH_USER }}
+      STAGING_REMOTE_ROOT: ${{ vars.STAGING_REMOTE_ROOT }}
+      STAGING_BACKUP_DIR: ${{ vars.STAGING_BACKUP_DIR }}
+      STAGING_POSTGRES_PASSWORD_FILE: ${{ vars.STAGING_POSTGRES_PASSWORD_FILE }}
+      STAGING_REDIS_PASSWORD_FILE: ${{ vars.STAGING_REDIS_PASSWORD_FILE }}
+      STAGING_LOGIN_IP_LIMIT: ${{ vars.STAGING_LOGIN_IP_LIMIT }}
+      STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+      STAGING_SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+      STAGING_GHCR_USER: ${{ secrets.STAGING_GHCR_USER }}
+      STAGING_GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha }}
+
+      - name: Fail closed on deployment inputs
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = "DEPLOY-STAGING"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git fetch origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+
+          : "${STAGING_HOST:?configure staging environment variable STAGING_HOST}"
+          : "${STAGING_SSH_HOST:?configure staging environment variable STAGING_SSH_HOST}"
+          : "${STAGING_SSH_USER:?configure staging environment variable STAGING_SSH_USER}"
+          : "${STAGING_REMOTE_ROOT:?configure staging environment variable STAGING_REMOTE_ROOT}"
+          : "${STAGING_BACKUP_DIR:?configure staging environment variable STAGING_BACKUP_DIR}"
+          : "${STAGING_POSTGRES_PASSWORD_FILE:?configure staging environment variable STAGING_POSTGRES_PASSWORD_FILE}"
+          : "${STAGING_REDIS_PASSWORD_FILE:?configure staging environment variable STAGING_REDIS_PASSWORD_FILE}"
+          : "${STAGING_SSH_PRIVATE_KEY:?configure staging environment secret STAGING_SSH_PRIVATE_KEY}"
+          : "${STAGING_SSH_KNOWN_HOSTS:?configure staging environment secret STAGING_SSH_KNOWN_HOSTS}"
+          : "${STAGING_GHCR_USER:?configure staging environment secret STAGING_GHCR_USER}"
+          : "${STAGING_GHCR_TOKEN:?configure staging environment secret STAGING_GHCR_TOKEN}"
+
+          [[ "$STAGING_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$STAGING_SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$STAGING_SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "$STAGING_GHCR_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "$STAGING_REMOTE_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$STAGING_BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$STAGING_POSTGRES_PASSWORD_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$STAGING_REDIS_PASSWORD_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$STAGING_REMOTE_ROOT" != *"/../"* ]]
+          [[ "$STAGING_BACKUP_DIR" != *"/../"* ]]
+          [[ "$STAGING_POSTGRES_PASSWORD_FILE" != *"/../"* ]]
+          [[ "$STAGING_REDIS_PASSWORD_FILE" != *"/../"* ]]
+
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          [[ "$ssh_port" =~ ^[0-9]+$ ]]
+          test "$ssh_port" -ge 1
+          test "$ssh_port" -le 65535
+
+          login_limit="${STAGING_LOGIN_IP_LIMIT:-10}"
+          [[ "$login_limit" =~ ^[0-9]+$ ]]
+          test "$login_limit" -ge 2
+          test "$login_limit" -le 100
+
+      - name: Build and publish immutable application images
+        id: images
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+          repository="${GITHUB_REPOSITORY,,}"
+          backend_repo="ghcr.io/$repository/backend-staging"
+          web_repo="ghcr.io/$repository/web-staging"
+          backend_tag="$backend_repo:$SOURCE_SHA"
+          web_tag="$web_repo:$SOURCE_SHA"
+          public_origin="https://$STAGING_HOST"
+
+          docker build \
+            -f infrastructure/staging/Dockerfile.backend \
+            -t "$backend_tag" \
+            .
+          docker build \
+            --build-arg "STAGING_PUBLIC_ORIGIN=$public_origin" \
+            -f infrastructure/staging/Dockerfile.web \
+            -t "$web_tag" \
+            .
+
+          docker push "$backend_tag"
+          docker push "$web_tag"
+
+          backend_digest="$(docker buildx imagetools inspect "$backend_tag" --format '{{.Manifest.Digest}}')"
+          web_digest="$(docker buildx imagetools inspect "$web_tag" --format '{{.Manifest.Digest}}')"
+          [[ "$backend_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$web_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          printf 'backend_image=%s@%s\n' "$backend_repo" "$backend_digest" >> "$GITHUB_OUTPUT"
+          printf 'web_image=%s@%s\n' "$web_repo" "$web_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH trust and release bundle
+        id: release
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend_image }}
+          WEB_IMAGE: ${{ steps.images.outputs.web_image }}
+        run: |
+          set -euo pipefail
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          login_limit="${STAGING_LOGIN_IP_LIMIT:-10}"
+          release_id="${SOURCE_SHA:0:12}-${GITHUB_RUN_ID}"
+          release_dir="$STAGING_REMOTE_ROOT/$release_id"
+
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/devforge_staging"
+          printf '%s\n' "$STAGING_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/devforge_staging" "$HOME/.ssh/known_hosts"
+
+          cat > /tmp/devforge-staging-release.env <<EOF
+          STAGING_HOST=$STAGING_HOST
+          STAGING_PUBLIC_ORIGIN=https://$STAGING_HOST
+          STAGING_POSTGRES_PASSWORD_FILE=$STAGING_POSTGRES_PASSWORD_FILE
+          STAGING_REDIS_PASSWORD_FILE=$STAGING_REDIS_PASSWORD_FILE
+          STAGING_BACKEND_IMAGE=$BACKEND_IMAGE
+          STAGING_WEB_IMAGE=$WEB_IMAGE
+          STAGING_HTTP_BIND=80
+          STAGING_HTTPS_BIND=443
+          STAGING_CADDYFILE=./Caddyfile
+          STAGING_LOGIN_IP_LIMIT=$login_limit
+          EOF
+          chmod 0600 /tmp/devforge-staging-release.env
+
+          tar -czf /tmp/devforge-staging-release.tgz \
+            infrastructure/staging/compose.yml \
+            infrastructure/staging/Caddyfile \
+            infrastructure/staging/scripts
+
+          printf 'release_dir=%s\n' "$release_dir" >> "$GITHUB_OUTPUT"
+          printf 'ssh_port=%s\n' "$ssh_port" >> "$GITHUB_OUTPUT"
+          printf 'login_limit=%s\n' "$login_limit" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bundle, authenticate registry, backup, and deploy
+        env:
+          RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
+          SSH_PORT: ${{ steps.release.outputs.ssh_port }}
+        run: |
+          set -euo pipefail
+          ssh_args=(
+            -i "$HOME/.ssh/devforge_staging"
+            -p "$SSH_PORT"
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+          target="$STAGING_SSH_USER@$STAGING_SSH_HOST"
+
+          ssh "${ssh_args[@]}" "$target" "mkdir -p '$RELEASE_DIR'"
+          scp -i "$HOME/.ssh/devforge_staging" -P "$SSH_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            /tmp/devforge-staging-release.tgz \
+            /tmp/devforge-staging-release.env \
+            "$target:$RELEASE_DIR/"
+
+          printf '%s' "$STAGING_GHCR_TOKEN" | \
+            ssh "${ssh_args[@]}" "$target" \
+              "docker login ghcr.io -u '$STAGING_GHCR_USER' --password-stdin"
+
+          ssh "${ssh_args[@]}" "$target" "
+            set -euo pipefail
+            cd '$RELEASE_DIR'
+            tar -xzf devforge-staging-release.tgz
+            mv devforge-staging-release.env release.env
+            chmod 0600 release.env
+            set -a
+            . ./release.env
+            set +a
+            bash infrastructure/staging/scripts/validate-host-secrets.sh
+            mkdir -p '$STAGING_BACKUP_DIR'
+            if docker compose --env-file release.env -f infrastructure/staging/compose.yml ps -q postgres | grep -q .; then
+              bash infrastructure/staging/scripts/backup.sh '$STAGING_BACKUP_DIR'
+            fi
+            docker compose --env-file release.env -f infrastructure/staging/compose.yml pull backend web
+            docker compose --env-file release.env -f infrastructure/staging/compose.yml up -d --no-build
+            bash infrastructure/staging/scripts/healthcheck.sh
+          "
+
+      - name: Verify real public TLS and isolation
+        env:
+          STAGING_PUBLIC_ORIGIN: https://${{ vars.STAGING_HOST }}
+        run: bash infrastructure/staging/scripts/verify-public-staging.sh
+
+      - name: Install audited real-staging browser harness
+        run: |
+          set -euo pipefail
+          rm -rf .staging-browser-harness
+          mkdir .staging-browser-harness
+          cd .staging-browser-harness
+          npm init -y >/dev/null
+          npm install --save-exact playwright@1.62.1
+          npm audit --audit-level=high
+          npx playwright install --with-deps chromium
+
+      - name: Real staging browser auth and trusted-ingress E2E
+        working-directory: .staging-browser-harness
+        env:
+          DEVFORGE_STAGING_ORIGIN: https://${{ vars.STAGING_HOST }}
+          DEVFORGE_STAGING_ALLOW_INTERNAL_CA: "0"
+          DEVFORGE_STAGING_LOGIN_IP_LIMIT: ${{ steps.release.outputs.login_limit }}
+        run: node ../infrastructure/staging/staging-e2e.mjs
+
+      - name: Verify post-deploy backup and non-destructive restore
+        env:
+          RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
+          SSH_PORT: ${{ steps.release.outputs.ssh_port }}
+        run: |
+          set -euo pipefail
+          ssh_args=(
+            -i "$HOME/.ssh/devforge_staging"
+            -p "$SSH_PORT"
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+          target="$STAGING_SSH_USER@$STAGING_SSH_HOST"
+          ssh "${ssh_args[@]}" "$target" "
+            set -euo pipefail
+            cd '$RELEASE_DIR'
+            set -a
+            . ./release.env
+            set +a
+            backup_path=\"\$(bash infrastructure/staging/scripts/backup.sh '$STAGING_BACKUP_DIR')\"
+            bash infrastructure/staging/scripts/verify-restore.sh \"\$backup_path\"
+          "
+
+      - name: Record deployment evidence
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend_image }}
+          WEB_IMAGE: ${{ steps.images.outputs.web_image }}
+          RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
+        run: |
+          {
+            echo '## Real staging deployment evidence'
+            echo
+            echo "- Source SHA: \`$SOURCE_SHA\`"
+            echo "- Public origin: \`https://$STAGING_HOST\`"
+            echo "- Backend image: \`$BACKEND_IMAGE\`"
+            echo "- Web image: \`$WEB_IMAGE\`"
+            echo "- Remote release directory: \`$RELEASE_DIR\`"
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+            echo '- Public TLS/certificate validation: PASS'
+            echo '- Direct service-port isolation: PASS'
+            echo '- Browser auth/session + ingress spoof/rate-limit proof: PASS'
+            echo '- Post-deploy backup + non-destructive restore: PASS'
+            echo
+            echo 'Production remains unauthorized. Monitoring/alert-delivery and rollback-drill evidence must be recorded before Production Candidate status.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Capture remote state on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
+          SSH_PORT: ${{ steps.release.outputs.ssh_port }}
+        run: |
+          test -n "${RELEASE_DIR:-}" || exit 0
+          test -n "${SSH_PORT:-}" || exit 0
+          ssh \
+            -i "$HOME/.ssh/devforge_staging" \
+            -p "$SSH_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$STAGING_SSH_USER@$STAGING_SSH_HOST" \
+            "cd '$RELEASE_DIR' && docker compose --env-file release.env -f infrastructure/staging/compose.yml ps && docker compose --env-file release.env -f infrastructure/staging/compose.yml logs --no-color --tail=200" \
+            || true
