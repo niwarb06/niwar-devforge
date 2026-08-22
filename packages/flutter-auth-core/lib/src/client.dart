@@ -19,6 +19,10 @@ final class DevForgeMobileAuthClient {
        _sessionVault = sessionVault,
        _transport = transport ?? const IoAuthHttpTransport();
 
+  static final RegExp _publicErrorCodePattern = RegExp(
+    r'^[a-z][a-z0-9_]{0,63}$',
+  );
+
   final Uri _baseUrl;
   final SecureSessionVault _sessionVault;
   final AuthHttpTransport _transport;
@@ -66,11 +70,14 @@ final class DevForgeMobileAuthClient {
     final token = json['session_token'];
     final tokenType = json['token_type'];
     final expiresInSeconds = json['expires_in_seconds'];
-    if (token is! String ||
-        token.length < 16 ||
-        tokenType != 'bearer' ||
+
+    if (token is! String || token.length < 16 || token.trim() != token) {
+      throw const InvalidAuthResponse('invalid_session_response');
+    }
+    if (tokenType != 'bearer' ||
         expiresInSeconds is! int ||
         expiresInSeconds <= 0) {
+      await _revokeTokenBestEffort(token);
       throw const InvalidAuthResponse('invalid_session_response');
     }
 
@@ -185,8 +192,8 @@ final class DevForgeMobileAuthClient {
         authorizationToken: token,
       );
     } on Object {
-      // The original secure-storage failure remains authoritative. The token is
-      // never returned to application state even if this cleanup attempt fails.
+      // The original validation/storage failure remains authoritative. The token
+      // is never returned to application state even if cleanup cannot complete.
     }
   }
 
@@ -218,13 +225,13 @@ final class DevForgeMobileAuthClient {
     required bool allowInsecureLocalhostForDevelopment,
   }) {
     if (!uri.isAbsolute || uri.host.isEmpty) {
-      throw ArgumentError.value(uri, 'backendApiBaseUrl', 'must be absolute');
+      throw ArgumentError(
+        'backendApiBaseUrl must be absolute and include a host',
+      );
     }
     if (uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
-      throw ArgumentError.value(
-        uri,
-        'backendApiBaseUrl',
-        'must not include credentials, query, or fragment',
+      throw ArgumentError(
+        'backendApiBaseUrl must not include credentials, query, or fragment',
       );
     }
 
@@ -238,10 +245,8 @@ final class DevForgeMobileAuthClient {
           isLoopback &&
           allowInsecureLocalhostForDevelopment;
       if (!localDevelopmentException) {
-        throw ArgumentError.value(
-          uri,
-          'backendApiBaseUrl',
-          'HTTPS is required outside explicit localhost development',
+        throw ArgumentError(
+          'backendApiBaseUrl requires HTTPS outside explicit localhost development',
         );
       }
     }
@@ -278,14 +283,20 @@ final class DevForgeMobileAuthClient {
     try {
       final json = _decodeObject(response.body);
       final parsedCode = json['code'];
-      if (parsedCode is String && parsedCode.isNotEmpty) {
+      if (parsedCode is String &&
+          _publicErrorCodePattern.hasMatch(parsedCode)) {
         code = parsedCode;
       }
     } on Object {
       // Error bodies are intentionally not included in the exception.
     }
 
-    final retryAfter = int.tryParse(response.header('retry-after') ?? '');
+    final parsedRetryAfter = int.tryParse(response.header('retry-after') ?? '');
+    final retryAfter = parsedRetryAfter != null &&
+            parsedRetryAfter > 0 &&
+            parsedRetryAfter <= 86_400
+        ? parsedRetryAfter
+        : null;
     return AuthApiException(
       statusCode: response.statusCode,
       code: code,
