@@ -397,45 +397,48 @@ void main() {
     expect(error.toString(), isNot(contains(secret)));
   });
 
-  test('unsafe public error metadata is replaced with bounded defaults', () async {
-    const secret = 'credential-like-value';
-    final transport = QueueTransport(<AuthHttpResponse>[
-      AuthHttpResponse(
-        statusCode: 429,
-        headers: const <String, String>{
-          'content-type': 'application/json',
-          'retry-after': '999999999',
-        },
-        body: jsonEncode(<String, Object?>{
-          'code': 'invalid\n$secret',
-          'message': null,
-        }),
-      ),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: memoryVault(),
-      transport: transport,
-    );
+  test(
+    'unsafe public error metadata is replaced with bounded defaults',
+    () async {
+      const secret = 'credential-like-value';
+      final transport = QueueTransport(<AuthHttpResponse>[
+        AuthHttpResponse(
+          statusCode: 429,
+          headers: const <String, String>{
+            'content-type': 'application/json',
+            'retry-after': '999999999',
+          },
+          body: jsonEncode(<String, Object?>{
+            'code': 'invalid_credentials\n$secret',
+            'message': null,
+          }),
+        ),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: memoryVault(),
+        transport: transport,
+      );
 
-    await expectLater(
-      client.register(email: 'new@example.test', password: 'password'),
-      throwsA(
-        isA<AuthApiException>()
-            .having((error) => error.code, 'code', 'request_failed')
-            .having(
-              (error) => error.retryAfterSeconds,
-              'retryAfterSeconds',
-              isNull,
-            )
-            .having(
-              (error) => error.toString(),
-              'toString',
-              isNot(contains(secret)),
-            ),
-      ),
-    );
-  });
+      await expectLater(
+        client.register(email: 'new@example.test', password: 'password'),
+        throwsA(
+          isA<AuthApiException>()
+              .having((error) => error.code, 'code', 'request_failed')
+              .having(
+                (error) => error.retryAfterSeconds,
+                'retryAfterSeconds',
+                isNull,
+              )
+              .having(
+                (error) => error.toString(),
+                'toString',
+                isNot(contains(secret)),
+              ),
+        ),
+      );
+    },
+  );
 
   test('API exceptions do not echo upstream error bodies or credentials', () {
     const error = AuthApiException(
