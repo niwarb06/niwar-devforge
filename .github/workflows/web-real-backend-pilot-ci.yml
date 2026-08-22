@@ -1,0 +1,114 @@
+name: Real Backend Web Auth Pilot CI
+
+on:
+  push:
+    paths:
+      - "apps/web_next/**"
+      - "packages/backend-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-real-backend-pilot-ci.yml"
+  pull_request:
+    paths:
+      - "apps/web_next/**"
+      - "packages/backend-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-real-backend-pilot-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-backend-browser-auth:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: devforge
+          POSTGRES_USER: devforge
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devforge -d devforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DEVFORGE_ENVIRONMENT: test
+      DEVFORGE_DATABASE_URL: postgresql+psycopg://devforge@127.0.0.1:5432/devforge
+      DEVFORGE_REDIS_URL: redis://127.0.0.1:6379/0
+      DEVFORGE_PILOT_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      DEVFORGE_REAL_BACKEND_ORIGIN: http://127.0.0.1:8000
+      DEVFORGE_PILOT_BACKEND_API_BASE_URL: http://127.0.0.1:8000/api/v1
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Build web BFF core
+        working-directory: packages/web-bff-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Build web session core
+        working-directory: packages/web-session-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Install backend core
+        working-directory: packages/backend-core
+        run: pip install -e .
+
+      - name: Apply backend migrations
+        working-directory: packages/backend-core
+        run: alembic upgrade head
+
+      - name: Install Next.js pilot
+        working-directory: apps/web_next
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck pilot
+        working-directory: apps/web_next
+        run: npm run typecheck
+
+      - name: Build production pilot
+        working-directory: apps/web_next
+        run: npm run build
+
+      - name: Install Chromium
+        working-directory: apps/web_next
+        run: npx playwright install --with-deps chromium
+
+      - name: Real backend browser E2E
+        working-directory: apps/web_next
+        run: npm run test:e2e:real-backend
