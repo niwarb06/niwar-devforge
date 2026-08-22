@@ -10,7 +10,11 @@ from sqlalchemy.pool import StaticPool
 
 from devforge_core.api.contracts import UpdateProfileRequest
 from devforge_core.auth.contracts import Actor, LoginCommand, RegisterCommand
-from devforge_core.auth.errors import EmailAlreadyExists, InvalidCredentials, PasswordPolicyViolation
+from devforge_core.auth.errors import (
+    EmailAlreadyExists,
+    InvalidCredentials,
+    PasswordPolicyViolation,
+)
 from devforge_core.auth.models import Base
 from devforge_core.auth.permissions import default_authorization_policy
 from devforge_core.auth.repository import SqlAlchemyUserRepository
@@ -200,8 +204,12 @@ def test_auth_service_uses_typed_errors() -> None:
         else:
             raise AssertionError("duplicate registration must raise EmailAlreadyExists")
 
+        short_password_command = RegisterCommand(
+            email=f"short-{uuid4()}@example.com",
+            password="short",
+        )
         try:
-            asyncio.run(auth.register(RegisterCommand(email=f"short-{uuid4()}@example.com", password="short")))
+            asyncio.run(auth.register(short_password_command))
         except PasswordPolicyViolation as exc:
             assert exc.reason == "password_too_short"
         else:
