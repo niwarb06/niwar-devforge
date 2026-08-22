@@ -5,17 +5,20 @@ from secrets import token_urlsafe
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from devforge_core.config import get_settings
+
 from .contracts import Actor
 from .models import Session as SessionModel
-from .models import User
+from .models import User, UserRole
 
 
 class DatabaseSessionIssuer:
     """Issues opaque session tokens while storing only a SHA-256 digest server-side."""
 
-    def __init__(self, db: Session, ttl: timedelta = timedelta(days=7)) -> None:
+    def __init__(self, db: Session, ttl: timedelta | None = None) -> None:
         self._db = db
-        self._ttl = ttl
+        settings = get_settings()
+        self._ttl = ttl or timedelta(minutes=settings.session_ttl_minutes)
 
     async def issue(self, actor: Actor) -> str:
         raw_token = token_urlsafe(48)
@@ -43,7 +46,18 @@ class DatabaseSessionIssuer:
         user = self._db.get(User, record.user_id)
         if user is None or not user.is_active:
             return None
-        return Actor(id=user.id, email=user.email, display_name=user.display_name, roles=("user",))
+
+        roles = self._db.scalars(
+            select(UserRole.role)
+            .where(UserRole.user_id == user.id)
+            .order_by(UserRole.role)
+        ).all()
+        return Actor(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            roles=tuple(roles),
+        )
 
     async def revoke(self, raw_token: str) -> None:
         record = self._db.scalar(
