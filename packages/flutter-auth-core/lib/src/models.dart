@@ -87,6 +87,24 @@ final class AuthTransportException implements Exception {
   String toString() => 'AuthTransportException(code: $code)';
 }
 
+final class AuthSessionStateException implements Exception {
+  const AuthSessionStateException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'AuthSessionStateException(code: $code)';
+}
+
+final class AuthSessionStorageException implements Exception {
+  const AuthSessionStorageException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'AuthSessionStorageException(code: $code)';
+}
+
 final class InvalidAuthResponse implements Exception {
   const InvalidAuthResponse(this.code);
 
