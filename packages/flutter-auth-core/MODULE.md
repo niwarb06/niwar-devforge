@@ -15,6 +15,7 @@ Provides a reusable, typed mobile authentication boundary for DevForge products 
 - Flutter SDK; CI proof pinned to Flutter `3.47.0`
 - `flutter_secure_storage` `11.0.0`, BSD-3-Clause, isolated behind `SecretStore`
 - Dart `dart:io` for the default Android/iOS HTTP transport
+- OpenAPI Generator CLI `7.24.0`, Apache-2.0, build-time parity proof only; generated output is ephemeral and not a runtime dependency of this module
 
 See `THIRD_PARTY.md` for dependency provenance and upgrade findings.
 
@@ -25,6 +26,7 @@ See `THIRD_PARTY.md` for dependency provenance and upgrade findings.
 - optional explicit insecure localhost development exception
 - injectable `AuthHttpTransport`
 - injectable `SecretStore` through `SecureSessionVault`
+- OpenAPI generation options in `openapi-generator-config.json`
 
 ## Public interfaces
 
@@ -39,6 +41,8 @@ See `THIRD_PARTY.md` for dependency provenance and upgrade findings.
 - `MobileLoginResult`
 - `LogoutResult`
 - typed sanitized exception classes
+
+Generated Dart code is not a public runtime interface of this module yet.
 
 ## Transport contract
 
@@ -70,27 +74,47 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 - no package logging of passwords, bearer tokens, raw response bodies, or supplied secret-bearing base URLs
 - Android/iOS platform setup for `flutter_secure_storage` must be verified in generated applications
 - this module is not a web auth transport; browser products use `web-bff-core`
+- generated `dart-dio` transport/auth helpers are contract evidence only and are not approved to replace the reviewed mobile credential boundary without a separate security/integration review
+
+## OpenAPI-generated Dart parity proof
+
+`OpenAPI Dart Parity CI` performs a generation-only compatibility gate:
+
+1. installs backend-core and exports the deterministic FastAPI OpenAPI schema;
+2. runs OpenAPI Generator CLI `7.24.0` with the stable `dart-dio` generator and `openapi-generator-config.json`;
+3. resolves generated dependencies and builds generated serializers;
+4. runs `dart analyze` against the generated package;
+5. runs `scripts/verify_openapi_parity.py` against both the exported schema and generated Dart output.
+
+The verifier covers the five mobile auth/profile routes, expected success status codes, `DevForgeSession` bearer protection on authenticated operations, request/response schema references, credential length constraints, session metadata invariants, profile shape, and generated-source route/model markers.
+
+Generated output is placed in a temporary CI directory. It is not committed, distributed, or granted authority over secure session storage.
 
 ## Tests and quality gates
 
 CI must run:
 
-- clean dependency resolution
+- clean Flutter dependency resolution
 - `dart format` verification
 - `flutter analyze`
 - `flutter test`
-- dependency snapshot
+- Flutter dependency snapshot
+- deterministic backend OpenAPI export for parity jobs
+- pinned OpenAPI Dart generation proof
+- generated Dart serializer build
+- generated Dart analysis
+- OpenAPI/generated-source parity verification
 
-CI setup actions are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, and sanitized exception strings.
+CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, and sanitized exception strings.
 
 ## Current promotion blockers
 
 - Android and iOS device/emulator integration tests against real platform secure storage
-- OpenAPI-driven Dart client generation/parity proof instead of the current typed hand-written transport proof
+- reviewed integration of generated API contracts/signatures behind the existing secure mobile transport boundary
 - broader network/cancellation/background-resume failure paths
 - dependency advisory/release automation for the Flutter package ecosystem
 - at least one production-like pilot
 
 ## Upgrade notes
 
-Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, or the storage provider require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
+Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, the storage provider, OpenAPI Generator version, generator type, or generated-runtime adoption require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
