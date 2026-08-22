@@ -49,10 +49,12 @@ For HTTP localhost only, a non-`__Host-` cookie name may be paired with `secureC
 
 The backend must separately configure only the real BFF/proxy network ranges in `DEVFORGE_TRUSTED_PROXY_CIDRS`. See `docs/17_TRUSTED_PROXY_CLIENT_ADDRESS.md`.
 
+Browser history/session restoration orchestration lives separately in `@niwar-devforge/web-session-core`. Keeping that browser-safe package separate prevents server-only BFF configuration and credential-translation code from being bundled into client UI code.
+
 ## Current limitations / promotion blockers
 
 - each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
-- browser history restoration/revalidation behavior needs an application integration proof
+- framework-neutral browser history/BFCache revalidation is implemented in `web-session-core`, but a real generated Next.js application/browser integration proof is still required
 - no full generated Next.js application pilot yet
 - no production-like deployment evidence yet
 
