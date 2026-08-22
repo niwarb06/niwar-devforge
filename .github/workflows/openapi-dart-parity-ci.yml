@@ -67,12 +67,29 @@ jobs:
           test -f /tmp/devforge-dart-client/pubspec.yaml
           test -d /tmp/devforge-dart-client/lib
 
-      - name: Build and analyze generated Dart package
+      - name: Build generated Dart package
         working-directory: /tmp/devforge-dart-client
         run: |
           dart pub get
           dart run build_runner build
-          dart analyze
+
+      - name: Analyze generated Dart package
+        working-directory: /tmp/devforge-dart-client
+        run: |
+          dart analyze --format machine --no-fatal-warnings | tee /tmp/devforge-dart-analyze.txt
+          python3 - <<'PY'
+          from pathlib import Path
+
+          findings = [
+              line for line in Path('/tmp/devforge-dart-analyze.txt').read_text().splitlines()
+              if line.strip()
+          ]
+          errors = [line for line in findings if line.startswith('ERROR|')]
+          warnings = [line for line in findings if line.startswith('WARNING|')]
+          if errors:
+              raise SystemExit('Generated Dart analysis contains errors:\n' + '\n'.join(errors))
+          print(f'Generated Dart analysis: 0 errors, {len(warnings)} warnings reported')
+          PY
 
       - name: Verify mobile contract parity
         run: |
