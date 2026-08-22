@@ -54,7 +54,7 @@ Version 11 requires Android API 23 or newer. Generated products must also follow
 
 ## DevForge backend contract proof
 
-The proof currently covers these backend-core contracts:
+The proof covers these backend-core contracts:
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/session`
@@ -62,8 +62,14 @@ The proof currently covers these backend-core contracts:
 - `GET /api/v1/users/me`
 - `PATCH /api/v1/users/me/profile`
 
-FastAPI OpenAPI remains the source of truth. This package proves the mobile transport/session boundary; it is not yet the final generated Dart client pipeline.
+FastAPI OpenAPI remains the source of truth. In addition to the hand-written secure transport proof, CI now exports the live backend schema, generates an ephemeral Dart client with OpenAPI Generator `7.24.0` using the stable `dart-dio` generator, builds the generated serializers, analyzes the generated package, and runs `scripts/verify_openapi_parity.py`.
+
+The parity verifier locks the mobile-auth assumptions that matter most: endpoint/method/status pairs, `DevForgeSession` bearer security, request/response component names, credential field bounds, session response invariants, profile shape, and presence of the same routes/models in generated Dart source.
+
+The generated package is **not committed, published, or used as the mobile credential transport yet**. Its generated Dio/auth layer must not bypass this module's HTTPS, no-redirect, secure-storage, revocation, and sanitized-error policies. A later integration step can reuse generated contract models/API signatures behind the reviewed mobile security boundary.
+
+Generator options are recorded in `openapi-generator-config.json`; provenance and adoption limits are in `THIRD_PARTY.md`.
 
 ## Development
 
-CI pins Flutter `3.47.0` and runs formatting, analysis, tests, and a dependency snapshot. CI setup actions are pinned to reviewed commit SHAs. The module remains EXPERIMENTAL until Android/iOS device integration, generated-client parity, broader failure-path coverage, and a production-like pilot are complete.
+`Flutter Auth Core CI` pins Flutter `3.47.0` and runs formatting, analysis, tests, and a dependency snapshot. `OpenAPI Dart Parity CI` additionally exports backend OpenAPI, generates/builds/analyzes the ephemeral Dart client, and runs the parity verifier. The module remains EXPERIMENTAL until Android/iOS device integration, reviewed generated-client runtime integration, broader failure-path coverage, and a production-like pilot are complete.
