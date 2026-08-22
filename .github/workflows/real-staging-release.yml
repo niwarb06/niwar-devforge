@@ -142,18 +142,23 @@ jobs:
           set -euo pipefail
           printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-          repository="${GITHUB_REPOSITORY,,}"
-          backend_repo="ghcr.io/$repository/backend-staging"
-          web_repo="ghcr.io/$repository/web-staging"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          repo_name="${repo_name,,}"
+          backend_repo="ghcr.io/$owner/${repo_name}-backend-staging"
+          web_repo="ghcr.io/$owner/${repo_name}-web-staging"
           backend_tag="$backend_repo:$SOURCE_SHA"
           web_tag="$web_repo:$SOURCE_SHA"
           public_origin="https://$STAGING_HOST"
+          source_url="https://github.com/$GITHUB_REPOSITORY"
 
           docker build \
+            --label "org.opencontainers.image.source=$source_url" \
             -f infrastructure/staging/Dockerfile.backend \
             -t "$backend_tag" \
             .
           docker build \
+            --label "org.opencontainers.image.source=$source_url" \
             --build-arg "STAGING_PUBLIC_ORIGIN=$public_origin" \
             -f infrastructure/staging/Dockerfile.web \
             -t "$web_tag" \
@@ -169,6 +174,7 @@ jobs:
 
           printf 'backend_image=%s@%s\n' "$backend_repo" "$backend_digest" >> "$GITHUB_OUTPUT"
           printf 'web_image=%s@%s\n' "$web_repo" "$web_digest" >> "$GITHUB_OUTPUT"
+          docker logout ghcr.io >/dev/null 2>&1 || true
 
       - name: Prepare SSH trust and release bundle
         id: release
@@ -210,7 +216,7 @@ jobs:
           printf 'ssh_port=%s\n' "$ssh_port" >> "$GITHUB_OUTPUT"
           printf 'login_limit=%s\n' "$login_limit" >> "$GITHUB_OUTPUT"
 
-      - name: Upload bundle, authenticate registry, backup, and deploy
+      - name: Upload bundle and deploy with ephemeral registry credentials
         env:
           RELEASE_DIR: ${{ steps.release.outputs.release_dir }}
           SSH_PORT: ${{ steps.release.outputs.ssh_port }}
@@ -234,28 +240,17 @@ jobs:
             /tmp/devforge-staging-release.env \
             "$target:$RELEASE_DIR/"
 
-          printf '%s' "$STAGING_GHCR_TOKEN" | \
-            ssh "${ssh_args[@]}" "$target" \
-              "docker login ghcr.io -u '$STAGING_GHCR_USER' --password-stdin"
-
           ssh "${ssh_args[@]}" "$target" "
             set -euo pipefail
             cd '$RELEASE_DIR'
             tar -xzf devforge-staging-release.tgz
             mv devforge-staging-release.env release.env
             chmod 0600 release.env
-            set -a
-            . ./release.env
-            set +a
-            bash infrastructure/staging/scripts/validate-host-secrets.sh
-            mkdir -p '$STAGING_BACKUP_DIR'
-            if docker compose --env-file release.env -f infrastructure/staging/compose.yml ps -q postgres | grep -q .; then
-              bash infrastructure/staging/scripts/backup.sh '$STAGING_BACKUP_DIR'
-            fi
-            docker compose --env-file release.env -f infrastructure/staging/compose.yml pull backend web
-            docker compose --env-file release.env -f infrastructure/staging/compose.yml up -d --no-build
-            bash infrastructure/staging/scripts/healthcheck.sh
           "
+
+          printf '%s' "$STAGING_GHCR_TOKEN" | \
+            ssh "${ssh_args[@]}" "$target" \
+              "cd '$RELEASE_DIR' && bash infrastructure/staging/scripts/deploy-release.sh release.env '$STAGING_BACKUP_DIR' '$STAGING_GHCR_USER'"
 
       - name: Verify real public TLS and isolation
         env:
@@ -337,6 +332,7 @@ jobs:
         run: |
           test -n "${RELEASE_DIR:-}" || exit 0
           test -n "${SSH_PORT:-}" || exit 0
+          test -f "$HOME/.ssh/devforge_staging" || exit 0
           ssh \
             -i "$HOME/.ssh/devforge_staging" \
             -p "$SSH_PORT" \
