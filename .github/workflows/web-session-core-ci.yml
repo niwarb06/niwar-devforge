@@ -1,0 +1,39 @@
+name: Web Session Core CI
+
+on:
+  push:
+    paths:
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-session-core-ci.yml"
+  pull_request:
+    paths:
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-session-core-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: packages/web-session-core
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
