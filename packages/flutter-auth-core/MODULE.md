@@ -85,12 +85,14 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 1. installs backend-core and exports the deterministic FastAPI OpenAPI schema;
 2. downloads OpenAPI Generator CLI `7.24.0`, verifies its pinned SHA-256 and reported version, then runs the stable `dart-dio` generator with `openapi-generator-config.json`;
 3. resolves generated dependencies and builds generated serializers;
-4. runs `dart analyze` against the generated package;
+4. runs Dart analysis with analyzer errors fatal while keeping generator-origin warnings visible in CI logs;
 5. runs `scripts/verify_openapi_parity.py` against both the exported schema and generated Dart output.
 
 The verifier covers the five mobile auth/profile routes, expected success status codes, `DevForgeSession` bearer protection on authenticated operations, request/response schema references, credential length constraints, session metadata invariants, profile shape, and generated-source route/model markers.
 
 Generated output is placed in a temporary CI directory. It is not committed, distributed, or granted authority over secure session storage. The proof uses the stable `built_value` serialization path. Optional/patch-only generator modes are not enabled because that combination produced invalid BuiltValue output for the nullable profile PATCH field in this generator version; the backend currently treats omitted and explicit-null `display_name` equivalently.
+
+The warning policy applies only to raw ephemeral generator output. Handwritten `flutter-auth-core` continues to use its normal stricter `flutter analyze` gate and is not allowed to accumulate warnings through this exception.
 
 ## Tests and quality gates
 
@@ -98,14 +100,14 @@ CI must run:
 
 - clean Flutter dependency resolution
 - `dart format` verification
-- `flutter analyze`
+- strict `flutter analyze` for handwritten module code
 - `flutter test`
 - Flutter dependency snapshot
 - deterministic backend OpenAPI export for parity jobs
 - checksum/version verification of the pinned OpenAPI Generator JAR
 - pinned OpenAPI Dart generation proof
 - generated Dart serializer build
-- generated Dart analysis
+- generated Dart analysis with errors fatal and warnings reported
 - OpenAPI/generated-source parity verification
 
 CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, and sanitized exception strings.
