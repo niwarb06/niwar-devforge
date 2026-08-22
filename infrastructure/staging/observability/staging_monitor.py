@@ -181,7 +181,11 @@ def run_once(
     }
     append_event(config.event_log, event)
 
-    if status != previous_status and config.webhook_url:
+    should_alert = (
+        (status == "unhealthy" and previous_status != "unhealthy")
+        or (status == "healthy" and previous_status == "unhealthy")
+    )
+    if should_alert and config.webhook_url:
         alert = {
             "schema_version": 1,
             "event": "staging_health_transition",
