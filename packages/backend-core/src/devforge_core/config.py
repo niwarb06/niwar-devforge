@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
     log_level: str = "INFO"
     session_ttl_minutes: int = Field(default=10_080, ge=5, le=43_200)
+    credential_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3_600)
+    login_ip_limit: int = Field(default=10, ge=1, le=10_000)
+    login_identifier_limit: int = Field(default=5, ge=1, le=10_000)
+    register_ip_limit: int = Field(default=5, ge=1, le=10_000)
+    register_identifier_limit: int = Field(default=3, ge=1, le=10_000)
 
     @property
     def is_production(self) -> bool:
