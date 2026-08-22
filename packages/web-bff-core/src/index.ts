@@ -45,11 +45,17 @@ const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 function normalizeConfig(config: WebBffConfig): NormalizedConfig {
   const backend = new URL(config.backendApiBaseUrl);
+  if (backend.protocol !== "http:" && backend.protocol !== "https:") {
+    throw new Error("backendApiBaseUrl must use http or https");
+  }
   if (backend.username || backend.password || backend.search || backend.hash) {
     throw new Error("backendApiBaseUrl must not contain credentials, query, or fragment");
   }
 
   const publicUrl = new URL(config.publicOrigin);
+  if (publicUrl.protocol !== "http:" && publicUrl.protocol !== "https:") {
+    throw new Error("publicOrigin must use http or https");
+  }
   if (
     publicUrl.pathname !== "/" ||
     publicUrl.search ||
@@ -71,7 +77,11 @@ function normalizeConfig(config: WebBffConfig): NormalizedConfig {
   }
 
   const maxRequestBodyBytes = config.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES;
-  if (!Number.isSafeInteger(maxRequestBodyBytes) || maxRequestBodyBytes < 1024 || maxRequestBodyBytes > 1_048_576) {
+  if (
+    !Number.isSafeInteger(maxRequestBodyBytes) ||
+    maxRequestBodyBytes < 1024 ||
+    maxRequestBodyBytes > 1_048_576
+  ) {
     throw new Error("maxRequestBodyBytes must be an integer between 1024 and 1048576");
   }
 
@@ -194,6 +204,7 @@ function clearSessionCookie(config: NormalizedConfig): string {
 }
 
 function withClearedCookie(response: Response, config: NormalizedConfig): Response {
+  if (response.status === 403) return response;
   response.headers.append("Set-Cookie", clearSessionCookie(config));
   return response;
 }
@@ -204,7 +215,11 @@ async function safeRelay(upstream: Response): Promise<Response> {
   const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? "";
 
   if (upstream.status >= 500) {
-    if (upstream.status === 503 && contentType.includes("application/json") && bodyBytes <= MAX_RELAY_BODY_BYTES) {
+    if (
+      upstream.status === 503 &&
+      contentType.includes("application/json") &&
+      bodyBytes <= MAX_RELAY_BODY_BYTES
+    ) {
       try {
         const parsed = JSON.parse(body) as { code?: unknown };
         if (parsed.code === "temporarily_unavailable") {
