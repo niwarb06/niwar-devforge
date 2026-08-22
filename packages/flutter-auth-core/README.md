@@ -31,16 +31,20 @@ Future<void> main() async {
 
 - HTTPS is required for normal backend URLs.
 - Plain HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1` when `allowInsecureLocalhostForDevelopment: true` is explicitly set.
+- Invalid base-URL errors do not echo the supplied URI, so accidentally embedded credentials/query secrets are not reflected into exception text.
 - Redirects are not followed by the default mobile transport.
 - Response bodies are capped at 64 KiB by default.
 - Raw session tokens are never included in `MobileLoginResult` or exception strings.
 - Expired or backend-rejected (`401`) sessions are deleted from secure storage.
 - A second login is rejected while a valid local session already exists; callers must explicitly logout first instead of silently replacing a credential and orphaning the older server session.
 - If the backend creates a new session but secure persistence fails, the client immediately attempts server-side revocation of that unpersisted token and returns a sanitized storage error.
+- If a `200` login response contains a valid-looking token but malformed companion session metadata, the client attempts immediate server-side revocation before rejecting the response.
+- Public API error codes are accepted only when they match the bounded canonical DevForge code shape; unsafe values fall back to `request_failed`.
+- `Retry-After` metadata is exposed only when it is a positive bounded integer.
 - Logout clears local storage only after the backend confirms `204` or `401`; transient failures retain the credential so server-side revocation can be retried.
 - `clearLocalSession()` exists for an explicit local-only reset and is intentionally separate from secure logout.
 - Secure-storage read/write/clear failures exposed by the client use sanitized error codes rather than raw provider exceptions.
-- No password, session token, or response body is logged by this package.
+- No password, session token, raw response body, or supplied secret-bearing base URL is logged by this package.
 
 ## Secure storage adapter
 
