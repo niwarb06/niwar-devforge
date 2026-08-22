@@ -9,6 +9,8 @@ from .errors import AuthorizationDenied
 from .models import Tenant, TenantMembership
 from .permissions import RolePermissionPolicy
 
+ALLOWED_TENANT_MEMBERSHIP_ROLES = frozenset({"member", "owner"})
+
 
 @dataclass(frozen=True, slots=True)
 class TenantContext:
@@ -34,7 +36,7 @@ class SqlAlchemyTenantAccessRepository:
                 TenantMembership.is_active.is_(True),
             )
         )
-        if membership is None:
+        if membership is None or membership.role not in ALLOWED_TENANT_MEMBERSHIP_ROLES:
             return None
         return TenantContext(tenant_id=tenant_id, membership_role=membership.role)
 
@@ -59,7 +61,7 @@ class TenantAuthorizationService:
             id=actor.id,
             email=actor.email,
             display_name=actor.display_name,
-            roles=(context.membership_role,),
+            roles=(f"tenant:{context.membership_role}",),
         )
         if not self.authorization.allows(scoped_actor, permission):
             raise AuthorizationDenied()
