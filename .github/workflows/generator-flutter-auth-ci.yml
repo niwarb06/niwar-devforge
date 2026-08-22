@@ -1,0 +1,167 @@
+name: Generator Flutter Auth CI
+
+on:
+  push:
+    paths:
+      - "generator/**"
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/generator-flutter-auth-ci.yml"
+  pull_request:
+    paths:
+      - "generator/**"
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/generator-flutter-auth-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-flutter-auth:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: devforge
+          POSTGRES_USER: devforge
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devforge -d devforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DEVFORGE_ENVIRONMENT: test
+      DEVFORGE_DATABASE_URL: postgresql+psycopg://devforge@127.0.0.1:5432/devforge
+      DEVFORGE_REDIS_URL: redis://127.0.0.1:6379/0
+      DEVFORGE_REAL_BACKEND_URL: http://127.0.0.1:8000/api/v1/
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Tool versions
+        run: |
+          node --version
+          python --version
+          flutter --version
+
+      - name: Generator unit tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Validate reusable Flutter auth core
+        working-directory: packages/flutter-auth-core
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
+
+      - name: Install real backend core
+        working-directory: packages/backend-core
+        run: pip install -e .
+
+      - name: Apply backend migrations
+        working-directory: packages/backend-core
+        run: alembic upgrade head
+
+      - name: Generate Flutter product twice
+        run: |
+          rm -rf .generated
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-proof.json \
+            --output .generated/flutter-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-proof.json \
+            --output .generated/flutter-second
+
+      - name: Prove deterministic Flutter output
+        run: diff -ru .generated/flutter-first .generated/flutter-second
+
+      - name: Resolve generated Flutter dependencies
+        working-directory: .generated/flutter-first
+        run: flutter pub get
+
+      - name: Format generated Flutter product
+        working-directory: .generated/flutter-first
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze generated Flutter product
+        working-directory: .generated/flutter-first
+        run: flutter analyze
+
+      - name: Generated Flutter widget E2E
+        working-directory: .generated/flutter-first
+        run: flutter test test/auth_screen_test.dart --reporter expanded
+
+      - name: Build generated product in Android host runner
+        run: |
+          flutter create \
+            --platforms=android \
+            --project-name=generated_mobile_auth_host \
+            --org=com.niwar.devforge \
+            .generated/android-host
+          rm -rf .generated/android-host/lib .generated/android-host/test
+          cp -R .generated/flutter-first/lib .generated/android-host/lib
+          cp -R .generated/flutter-first/test .generated/android-host/test
+          cp .generated/flutter-first/pubspec.yaml .generated/android-host/pubspec.yaml
+          cp .generated/flutter-first/analysis_options.yaml .generated/android-host/analysis_options.yaml
+          cd .generated/android-host
+          flutter pub get
+          flutter analyze lib
+          flutter build apk --debug
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Start real backend
+        run: |
+          nohup python -m uvicorn devforge_core.main:app --host 127.0.0.1 --port 8000 > .generated/backend.log 2>&1 &
+          echo $! > .generated/backend.pid
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health/live >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              cat .generated/backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Generated Flutter real-backend auth E2E
+        working-directory: .generated/flutter-first
+        run: flutter test test/real_backend_test.dart --reporter expanded
+
+      - name: Stop runtime backend
+        if: always()
+        run: |
+          if [ -f .generated/backend.pid ]; then kill "$(cat .generated/backend.pid)" || true; fi
