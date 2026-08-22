@@ -77,56 +77,65 @@ AuthHttpResponse jsonResponse(int status, Map<String, Object?> body) {
 SecureSessionVault memoryVault() => SecureSessionVault(MemorySecretStore());
 
 void main() {
-  test('login stores opaque token in the vault but does not expose it in result', () async {
-    const token = 'opaque-mobile-session-token-123456789';
-    final vault = memoryVault();
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(200, <String, Object?>{
-        'session_token': token,
-        'token_type': 'bearer',
-        'expires_in_seconds': 3600,
-      }),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
+  test(
+    'login stores opaque token in the vault but does not expose it in result',
+    () async {
+      const token = 'opaque-mobile-session-token-123456789';
+      final vault = memoryVault();
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(200, <String, Object?>{
+          'session_token': token,
+          'token_type': 'bearer',
+          'expires_in_seconds': 3600,
+        }),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    final result = await client.login(
-      identifier: 'user@example.test',
-      password: 'correct-horse-battery-staple',
-    );
+      final result = await client.login(
+        identifier: 'user@example.test',
+        password: 'correct-horse-battery-staple',
+      );
 
-    expect(result.authenticated, isTrue);
-    expect(result.toString(), isNot(contains(token)));
-    expect((await vault.read())?.token, token);
-    expect(transport.requests.single.uri.path, '/api/v1/auth/session');
-  });
+      expect(result.authenticated, isTrue);
+      expect(result.toString(), isNot(contains(token)));
+      expect((await vault.read())?.token, token);
+      expect(transport.requests.single.uri.path, '/api/v1/auth/session');
+    },
+  );
 
-  test('authenticated profile reads translate secure token to bearer server call', () async {
-    const token = 'opaque-mobile-session-token-abcdefghi';
-    final vault = memoryVault();
-    await vault.save(token: token, expiresIn: const Duration(hours: 1));
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(200, <String, Object?>{
-        'user_id': '2f4191c8-d1d9-4b16-bc22-1cad431b7ae2',
-        'email': 'user@example.test',
-        'display_name': 'Mobile User',
-        'is_active': true,
-      }),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
+  test(
+    'authenticated profile reads translate secure token to bearer server call',
+    () async {
+      const token = 'opaque-mobile-session-token-abcdefghi';
+      final vault = memoryVault();
+      await vault.save(token: token, expiresIn: const Duration(hours: 1));
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(200, <String, Object?>{
+          'user_id': '2f4191c8-d1d9-4b16-bc22-1cad431b7ae2',
+          'email': 'user@example.test',
+          'display_name': 'Mobile User',
+          'is_active': true,
+        }),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    final profile = await client.currentProfile();
+      final profile = await client.currentProfile();
 
-    expect(profile?.email, 'user@example.test');
-    expect(transport.requests.single.headers['Authorization'], 'Bearer $token');
-  });
+      expect(profile?.email, 'user@example.test');
+      expect(
+        transport.requests.single.headers['Authorization'],
+        'Bearer $token',
+      );
+    },
+  );
 
   test('401 clears stale secure session', () async {
     const token = 'opaque-mobile-session-token-stale-123';
@@ -164,96 +173,111 @@ void main() {
     expect(store.values, isEmpty);
   });
 
-  test('registration returns profile and never creates a local session', () async {
-    final vault = memoryVault();
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(201, <String, Object?>{
-        'user_id': '4a335073-e9dc-416f-b133-836fe7cf1a68',
-        'email': 'new@example.test',
-        'display_name': null,
-        'is_active': true,
-      }),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
+  test(
+    'registration returns profile and never creates a local session',
+    () async {
+      final vault = memoryVault();
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(201, <String, Object?>{
+          'user_id': '4a335073-e9dc-416f-b133-836fe7cf1a68',
+          'email': 'new@example.test',
+          'display_name': null,
+          'is_active': true,
+        }),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    final profile = await client.register(
-      email: 'new@example.test',
-      password: 'correct-horse-battery-staple',
-    );
+      final profile = await client.register(
+        email: 'new@example.test',
+        password: 'correct-horse-battery-staple',
+      );
 
-    expect(profile.email, 'new@example.test');
-    expect(await vault.read(), isNull);
-  });
+      expect(profile.email, 'new@example.test');
+      expect(await vault.read(), isNull);
+    },
+  );
 
-  test('malformed login success is rejected before token persistence', () async {
-    final vault = memoryVault();
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(200, <String, Object?>{
-        'session_token': 'short',
-        'token_type': 'bearer',
-        'expires_in_seconds': 3600,
-      }),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
+  test(
+    'malformed login success is rejected before token persistence',
+    () async {
+      final vault = memoryVault();
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(200, <String, Object?>{
+          'session_token': 'short',
+          'token_type': 'bearer',
+          'expires_in_seconds': 3600,
+        }),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    await expectLater(
-      client.login(identifier: 'user@example.test', password: 'password'),
-      throwsA(isA<InvalidAuthResponse>()),
-    );
-    expect(await vault.read(), isNull);
-  });
+      await expectLater(
+        client.login(identifier: 'user@example.test', password: 'password'),
+        throwsA(isA<InvalidAuthResponse>()),
+      );
+      expect(await vault.read(), isNull);
+    },
+  );
 
-  test('logout keeps local token when server revocation cannot be confirmed', () async {
-    const token = 'opaque-mobile-session-token-retry-12345';
-    final vault = memoryVault();
-    await vault.save(token: token, expiresIn: const Duration(hours: 1));
-    final transport = QueueTransport(<AuthHttpResponse>[
-      jsonResponse(503, <String, Object?>{
-        'code': 'temporarily_unavailable',
-        'message': null,
-      }),
-    ]);
-    final client = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
-      sessionVault: vault,
-      transport: transport,
-    );
+  test(
+    'logout keeps local token when server revocation cannot be confirmed',
+    () async {
+      const token = 'opaque-mobile-session-token-retry-12345';
+      final vault = memoryVault();
+      await vault.save(token: token, expiresIn: const Duration(hours: 1));
+      final transport = QueueTransport(<AuthHttpResponse>[
+        jsonResponse(503, <String, Object?>{
+          'code': 'temporarily_unavailable',
+          'message': null,
+        }),
+      ]);
+      final client = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('https://api.example.test/api/v1'),
+        sessionVault: vault,
+        transport: transport,
+      );
 
-    await expectLater(client.logout(), throwsA(isA<AuthApiException>()));
-    expect((await vault.read())?.token, token);
-  });
+      await expectLater(client.logout(), throwsA(isA<AuthApiException>()));
+      expect((await vault.read())?.token, token);
+    },
+  );
 
-  test('production transport requires HTTPS and only permits explicit localhost HTTP', () {
-    expect(
-      () => DevForgeMobileAuthClient(
-        backendApiBaseUrl: Uri.parse('http://api.example.test/api/v1'),
+  test(
+    'production transport requires HTTPS and only permits explicit localhost HTTP',
+    () {
+      expect(
+        () => DevForgeMobileAuthClient(
+          backendApiBaseUrl: Uri.parse('http://api.example.test/api/v1'),
+          sessionVault: memoryVault(),
+        ),
+        throwsArgumentError,
+      );
+
+      final localClient = DevForgeMobileAuthClient(
+        backendApiBaseUrl: Uri.parse('http://127.0.0.1:8000/api/v1'),
         sessionVault: memoryVault(),
-      ),
-      throwsArgumentError,
-    );
-
-    final localClient = DevForgeMobileAuthClient(
-      backendApiBaseUrl: Uri.parse('http://127.0.0.1:8000/api/v1'),
-      sessionVault: memoryVault(),
-      allowInsecureLocalhostForDevelopment: true,
-    );
-    expect(localClient, isA<DevForgeMobileAuthClient>());
-  });
+        allowInsecureLocalhostForDevelopment: true,
+      );
+      expect(localClient, isA<DevForgeMobileAuthClient>());
+    },
+  );
 
   test('API exceptions do not echo upstream error bodies or credentials', () {
     const error = AuthApiException(
       statusCode: 401,
       code: 'invalid_credentials',
     );
-    expect(error.toString(), 'AuthApiException(statusCode: 401, code: invalid_credentials)');
+    expect(
+      error.toString(),
+      'AuthApiException(statusCode: 401, code: invalid_credentials)',
+    );
     expect(error.toString(), isNot(contains('password')));
   });
 }
