@@ -4,6 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -59,7 +60,7 @@ def test_profile_api_contract_rejects_unknown_fields() -> None:
 
     try:
         UpdateProfileRequest(display_name="User", unknown=True)
-    except Exception:
+    except ValidationError:
         pass
     else:
         raise AssertionError("unknown API fields must be rejected")
