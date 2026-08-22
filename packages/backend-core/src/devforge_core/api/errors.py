@@ -1,16 +1,21 @@
-from dataclasses import dataclass
-
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from .contracts import ErrorResponse
 
 
-@dataclass(frozen=True, slots=True)
 class ApiError(Exception):
-    status_code: int
-    code: str
-    message: str | None = None
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        code: str,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
 
 
 async def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:
