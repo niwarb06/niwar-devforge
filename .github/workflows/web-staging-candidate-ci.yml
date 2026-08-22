@@ -78,6 +78,15 @@ jobs:
       - name: Generator unit tests
         run: node --test generator/tests/*.test.mjs
 
+      - name: Build reusable web modules
+        run: |
+          cd packages/web-bff-core
+          npm install
+          npm run build
+          cd ../web-session-core
+          npm install
+          npm run build
+
       - name: Generate browser proof client
         run: |
           rm -rf .generated/staging-e2e
