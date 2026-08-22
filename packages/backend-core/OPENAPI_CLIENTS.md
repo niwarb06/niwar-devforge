@@ -26,14 +26,28 @@ Provenance for this CI-only tool:
 
 The version is explicitly pinned in CI. This proof does **not** yet promote a reusable TypeScript client package; a product/client package must add its own dependency lockfile, platform tests, and transport adapter before promotion.
 
+## Current Flutter/Dart proof
+
+`OpenAPI Dart Parity CI` performs a second experimental proof for the mobile contract:
+
+- OpenAPI Generator CLI: `7.24.0`
+- generator: `dart-dio` (stable generator)
+- license: Apache-2.0
+- configuration: `packages/flutter-auth-core/openapi-generator-config.json`
+- parity verifier: `packages/flutter-auth-core/scripts/verify_openapi_parity.py`
+
+The job exports the live FastAPI schema, generates an ephemeral Dart package, resolves/builds generated serializers, runs `dart analyze`, then verifies the mobile auth/profile route, status, bearer-security, schema, field-bound, and generated-source markers expected by `flutter-auth-core`.
+
+Generated Dart output is intentionally temporary. It is **not** committed or approved as the mobile credential transport. The generated Dio/auth helpers must not replace the reviewed `DevForgeMobileAuthClient` TLS, no-redirect, secure-storage, revocation, and sanitized-error behavior without a separate compatibility/security review.
+
 ## Client generation
 
 Generated web/mobile clients must be produced from the exported schema rather than handwritten duplicate request/response models.
 
-Recommended adapters:
+Approved proof directions:
 
-- Next.js/TypeScript: an approved OpenAPI TypeScript generator that emits typed request/response contracts and does not embed authentication secrets.
-- Flutter/Dart: an approved OpenAPI Dart generator behind the DevForge API-client package boundary.
+- Next.js/TypeScript: pinned `openapi-typescript` for declaration-generation proof; browser authentication remains server-mediated through the BFF/cookie boundary.
+- Flutter/Dart: pinned OpenAPI Generator `dart-dio` for generation/parity proof; production adoption must sit behind the reviewed mobile credential/security boundary.
 
 Generator choice and version must be pinned before generated code is promoted into a reusable module. Generated output must pass its platform lint/type/build checks and must not replace server-side authorization.
 
@@ -41,4 +55,4 @@ For web products, generated TypeScript code is a contract/client layer only. Bro
 
 ## Compatibility
 
-API contract changes require review for backward compatibility. Breaking schema changes require a versioned API boundary or an explicit migration plan. CI validates that the backend can export a valid schema on every backend-core change.
+API contract changes require review for backward compatibility. Breaking schema changes require a versioned API boundary or an explicit migration plan. CI validates that the backend can export a valid schema on every backend-core change, while the Dart parity job checks that current mobile-auth assumptions and generated Dart output remain compatible with that schema.
