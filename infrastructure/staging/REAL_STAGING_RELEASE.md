@@ -29,22 +29,28 @@ Configure these GitHub environment secrets:
 | `STAGING_SSH_PRIVATE_KEY` | Private key for the dedicated deployment account. Never commit it. |
 | `STAGING_SSH_KNOWN_HOSTS` | Pre-verified `known_hosts` line(s) for the SSH target. The workflow never disables host-key checking. |
 | `STAGING_GHCR_USER` | Read-only GHCR identity used by the staging host. |
-| `STAGING_GHCR_TOKEN` | Read-only GHCR token used only over the verified SSH channel. |
+| `STAGING_GHCR_TOKEN` | Read-only GHCR token delivered only over the verified SSH channel. |
 
-The workflow uses the repository `GITHUB_TOKEN` only to publish application images to GHCR. The remote host receives only immutable `@sha256:` application image references.
+The workflow uses the repository `GITHUB_TOKEN` only to publish application images to GHCR. It resolves the pushed images to immutable `@sha256:` references before deployment. The remote read-only GHCR credential is placed in a temporary Docker configuration for the pull and removed immediately after use; it is not intentionally persisted in the deployment account's normal Docker config.
 
 ## Host preparation
 
 The deployment account needs Docker/Compose access without becoming a general-purpose root shell. Configure the host firewall so only the intended management path and public TCP 80/443 (plus UDP 443 if HTTP/3 is enabled) are reachable. Do not publish ports 3000, 8000, 5432, or 6379.
 
-Create host-only secret files outside the repository. The backend/migration image uses fixed UID/GID `10001:10001`, so the files must be group-readable by GID 10001 and not world-readable:
+Create the release and backup roots with ownership that permits the deployment account to create release directories and backups. Keep the password files outside release directories.
+
+The backend/migration image uses fixed UID/GID `10001:10001`, so the password files must be group-readable by GID 10001 and not world-readable. Run the following while logged in as the intended deployment account so `$(id -u)` records that operator as the owner:
 
 ```bash
-sudo install -d -m 0750 -o root -g 10001 /srv/niwar-devforge/staging/secrets
+sudo install -d -m 0750 -o "$(id -u)" -g 10001 /srv/niwar-devforge/staging/secrets
 openssl rand -hex 32 | sudo tee /srv/niwar-devforge/staging/secrets/postgres_password >/dev/null
 openssl rand -hex 32 | sudo tee /srv/niwar-devforge/staging/secrets/redis_password >/dev/null
-sudo chown root:10001 /srv/niwar-devforge/staging/secrets/postgres_password /srv/niwar-devforge/staging/secrets/redis_password
-sudo chmod 0640 /srv/niwar-devforge/staging/secrets/postgres_password /srv/niwar-devforge/staging/secrets/redis_password
+sudo chown "$(id -u):10001" \
+  /srv/niwar-devforge/staging/secrets/postgres_password \
+  /srv/niwar-devforge/staging/secrets/redis_password
+sudo chmod 0640 \
+  /srv/niwar-devforge/staging/secrets/postgres_password \
+  /srv/niwar-devforge/staging/secrets/redis_password
 ```
 
 The release workflow runs `validate-host-secrets.sh` before migrations or application startup and fails closed if either file is missing, empty, symlinked, not mode `0640`, or not group `10001`.
@@ -72,17 +78,16 @@ For an authorized dispatch, the gate:
 
 1. checks out the exact main-reachable source SHA;
 2. builds backend and generated Web images from that revision;
-3. pushes them to GHCR and resolves immutable `@sha256:` digests;
+3. publishes `niwar-devforge-backend-staging` and `niwar-devforge-web-staging` packages in the repository owner's GHCR namespace and resolves immutable `@sha256:` digests;
 4. validates SSH trust and deployment inputs;
 5. uploads a release bundle into a new per-run remote release directory;
 6. validates host secret metadata;
-7. takes a pre-deploy PostgreSQL backup when a staging database already exists;
-8. pulls the immutable application images and starts the isolated Compose topology with `--no-build`;
-9. runs health checks over normal certificate validation;
-10. verifies the public certificate/security headers and fails if ports 3000/8000/5432/6379 are publicly reachable;
-11. runs the real Chromium register/login/session/logout and trusted-ingress spoof/rate-limit proof;
-12. creates a post-deploy PostgreSQL backup and proves a non-destructive restore into a temporary database;
-13. records the exact source SHA, immutable application image digests, public origin, release directory, and workflow run ID in the GitHub Actions job summary.
+7. authenticates to GHCR through a temporary Docker config, takes a pre-deploy PostgreSQL backup when a staging database already exists, pulls the immutable application images, starts the isolated Compose topology with `--no-build`, and removes the temporary registry config;
+8. runs health checks over normal certificate validation;
+9. verifies the public certificate/security headers and fails if ports 3000/8000/5432/6379 are publicly reachable;
+10. runs the audited Chromium register/login/session/logout and trusted-ingress spoof/rate-limit proof;
+11. creates a post-deploy PostgreSQL backup and proves a non-destructive restore into a temporary database;
+12. records the exact source SHA, immutable application image digests, public origin, release directory, and workflow run ID in the GitHub Actions job summary.
 
 The workflow does **not** automatically roll back on failure because migrations may introduce compatibility boundaries. It captures remote state and logs; rollback remains an explicit reviewed operation using the previous known-good immutable image digests and the migration-specific recovery plan.
 
