@@ -93,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     compatible = sub.add_parser("assert-schema-compatible")
     compatible.add_argument("--path", required=True, type=Path)
     compatible.add_argument("--current-schema-head", required=True)
+
+    source = sub.add_parser("assert-source")
+    source.add_argument("--path", required=True, type=Path)
+    source.add_argument("--source-sha", required=True)
     return parser
 
 
@@ -115,6 +119,14 @@ def main() -> int:
     payload = load(args.path)
     if args.command == "validate":
         print(f"release metadata valid for {payload['source_sha']}")
+        return 0
+
+    if args.command == "assert-source":
+        if not SHA_RE.fullmatch(args.source_sha):
+            raise SystemExit("source SHA is invalid")
+        if payload["source_sha"] != args.source_sha:
+            raise SystemExit("release metadata source SHA does not match the requested release")
+        print(f"release source confirmed at {args.source_sha}")
         return 0
 
     current = args.current_schema_head
