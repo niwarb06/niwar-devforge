@@ -82,7 +82,10 @@ final class SecureSessionVault {
       return null;
     }
 
-    final expiresAt = DateTime.fromMillisecondsSinceEpoch(expiresAtMs, isUtc: true);
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      expiresAtMs,
+      isUtc: true,
+    );
     final currentTime = (now ?? DateTime.now()).toUtc();
     if (!expiresAt.isAfter(currentTime)) {
       await clear();
