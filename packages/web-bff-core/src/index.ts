@@ -1,9 +1,14 @@
+export type TrustedClientAddressResolver = (
+  request: Request,
+) => string | null | Promise<string | null>;
+
 export interface WebBffConfig {
   backendApiBaseUrl: string;
   publicOrigin: string;
   cookieName?: string;
   secureCookie?: boolean;
   maxRequestBodyBytes?: number;
+  resolveTrustedClientAddress?: TrustedClientAddressResolver;
   fetchImpl?: typeof fetch;
 }
 
@@ -21,6 +26,7 @@ interface NormalizedConfig {
   cookieName: string;
   secureCookie: boolean;
   maxRequestBodyBytes: number;
+  resolveTrustedClientAddress?: TrustedClientAddressResolver;
   fetchImpl: typeof fetch;
 }
 
@@ -91,6 +97,7 @@ function normalizeConfig(config: WebBffConfig): NormalizedConfig {
     cookieName,
     secureCookie,
     maxRequestBodyBytes,
+    resolveTrustedClientAddress: config.resolveTrustedClientAddress,
     fetchImpl: config.fetchImpl ?? globalThis.fetch,
   };
 }
@@ -267,6 +274,43 @@ function authorizationHeaders(token: string, extra?: HeadersInit): Headers {
   return headers;
 }
 
+function isValidIpLiteral(value: string): boolean {
+  if (!value || value.length > 64 || value !== value.trim() || /[\s,]/.test(value)) {
+    return false;
+  }
+
+  if (value.includes(":")) {
+    try {
+      new URL(`http://[${value}]/`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const parts = value.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^(0|[1-9][0-9]{0,2})$/.test(part)) return false;
+    const octet = Number(part);
+    return octet >= 0 && octet <= 255;
+  });
+}
+
+async function credentialHeaders(request: Request, config: NormalizedConfig): Promise<Headers> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (!config.resolveTrustedClientAddress) return headers;
+
+  const clientAddress = await config.resolveTrustedClientAddress(request);
+  if (clientAddress === null) return headers;
+  if (!isValidIpLiteral(clientAddress)) {
+    throw new Error("resolveTrustedClientAddress must return one valid IP literal or null");
+  }
+
+  headers.set("X-Forwarded-For", clientAddress);
+  return headers;
+}
+
 function handleRequestError(error: unknown): Response {
   if (error instanceof BffRequestError) {
     return publicError(error.status, error.code);
@@ -305,7 +349,7 @@ export function createWebAuthBff(input: WebBffConfig): WebAuthBffHandlers {
         const body = await readJsonBody(request, config);
         const upstream = await backendFetch(config, "auth/register", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: await credentialHeaders(request, config),
           body,
         });
         return await safeRelay(upstream);
@@ -320,7 +364,7 @@ export function createWebAuthBff(input: WebBffConfig): WebAuthBffHandlers {
         const body = await readJsonBody(request, config);
         const upstream = await backendFetch(config, "auth/session", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: await credentialHeaders(request, config),
           body,
         });
 

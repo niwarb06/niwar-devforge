@@ -8,13 +8,14 @@
 
 ## Purpose
 
-Provides the reusable browser authentication boundary for DevForge web products while keeping opaque backend session credentials out of browser JavaScript.
+Provides the reusable browser authentication boundary for DevForge web products while keeping opaque backend session credentials out of browser JavaScript and supporting an explicit trusted client-address adapter for credential abuse controls.
 
 ## Public interface
 
 - `createWebAuthBff(config)`
 - `WebBffConfig`
 - `WebAuthBffHandlers`
+- `TrustedClientAddressResolver`
 - handlers: `register`, `login`, `logout`, `me`, `updateProfile`
 
 ## Security contract
@@ -31,6 +32,8 @@ Provides the reusable browser authentication boundary for DevForge web products 
 - credential/profile mutation bodies must be JSON and are bounded to 16 KiB by default
 - sensitive BFF responses are `no-store`
 - unexpected upstream failures are replaced with generic public errors
+- browser-provided `X-Forwarded-For` is not relayed by default
+- a configured `resolveTrustedClientAddress` may return exactly one IPv4/IPv6 literal from trusted server/platform metadata; invalid or multi-value output fails closed before backend fetch
 
 ## Configuration
 
@@ -39,13 +42,16 @@ Provides the reusable browser authentication boundary for DevForge web products 
 - `cookieName`: optional; defaults to `__Host-devforge_session`
 - `secureCookie`: optional; defaults to `true`
 - `maxRequestBodyBytes`: optional; defaults to 16 KiB
+- `resolveTrustedClientAddress`: optional server-only deployment adapter for a trustworthy client IP; never blindly copy a browser header
 - `fetchImpl`: optional adapter for runtime/testing
 
 For HTTP localhost only, a non-`__Host-` cookie name may be paired with `secureCookie: false`. Staging/production must use secure cookies.
 
+The backend must separately configure only the real BFF/proxy network ranges in `DEVFORGE_TRUSTED_PROXY_CIDRS`. See `docs/17_TRUSTED_PROXY_CLIENT_ADDRESS.md`.
+
 ## Current limitations / promotion blockers
 
-- trusted proxy/client-address policy is still required before production BFF credential traffic can preserve meaningful per-client backend rate limiting
+- each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
 - browser history restoration/revalidation behavior needs an application integration proof
 - no full generated Next.js application pilot yet
 - no production-like deployment evidence yet
@@ -65,3 +71,6 @@ CI must verify:
 - backend logout revocation call plus cookie clearing
 - `__Host-`/Secure invariant
 - JSON content-type enforcement
+- browser-supplied forwarding metadata is not relayed by default
+- trusted client-address resolver emits one validated IP when explicitly configured
+- invalid/multi-value resolver output fails closed before backend fetch

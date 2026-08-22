@@ -23,6 +23,7 @@ from devforge_core.auth.security import Argon2Hasher
 from devforge_core.auth.service import AuthService
 from devforge_core.auth.sessions import DatabaseSessionIssuer
 from devforge_core.cache import get_redis
+from devforge_core.client_address import resolve_client_address
 from devforge_core.config import get_settings
 from devforge_core.database import get_db
 from devforge_core.users import SqlAlchemyUserProfileRepository
@@ -86,9 +87,8 @@ def _stable_bucket(value: str) -> str:
     return sha256(value.strip().lower().encode("utf-8")).hexdigest()
 
 
-def _client_bucket(request: Request) -> str:
-    client = "unknown" if request.client is None else request.client.host
-    return _stable_bucket(client)
+def _client_bucket(request: Request, trusted_proxy_cidrs: list[str]) -> str:
+    return _stable_bucket(resolve_client_address(request, trusted_proxy_cidrs))
 
 
 def _identifier_bucket(identifier: str) -> str:
@@ -165,7 +165,7 @@ async def register(
     await _enforce_credential_limits(
         limiter,
         operation="register",
-        client_ip=_client_bucket(request),
+        client_ip=_client_bucket(request, settings.trusted_proxy_cidrs),
         identifier=payload.email,
         ip_limit=settings.register_ip_limit,
         identifier_limit=settings.register_identifier_limit,
@@ -208,7 +208,7 @@ async def create_session(
     await _enforce_credential_limits(
         limiter,
         operation="login",
-        client_ip=_client_bucket(request),
+        client_ip=_client_bucket(request, settings.trusted_proxy_cidrs),
         identifier=payload.identifier,
         ip_limit=settings.login_ip_limit,
         identifier_limit=settings.login_identifier_limit,
