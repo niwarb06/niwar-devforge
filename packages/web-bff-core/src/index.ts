@@ -26,7 +26,7 @@ interface NormalizedConfig {
   cookieName: string;
   secureCookie: boolean;
   maxRequestBodyBytes: number;
-  resolveTrustedClientAddress?: TrustedClientAddressResolver;
+  resolveTrustedClientAddress: TrustedClientAddressResolver | undefined;
   fetchImpl: typeof fetch;
 }
 
