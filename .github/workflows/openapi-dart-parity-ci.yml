@@ -47,11 +47,12 @@ jobs:
       - name: Fetch pinned OpenAPI Generator
         env:
           OPENAPI_GENERATOR_VERSION: "7.24.0"
+          OPENAPI_GENERATOR_SHA256: "4b83ccc6fd43056c8c631cd0195e5100bd0550912502527bab09ac76152dab0c"
         run: |
           curl --fail --silent --show-error --location --retry 3 \
             "https://repo.maven.apache.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
             -o /tmp/openapi-generator-cli.jar
-          sha256sum /tmp/openapi-generator-cli.jar
+          echo "${OPENAPI_GENERATOR_SHA256}  /tmp/openapi-generator-cli.jar" | sha256sum --check --strict
           java -jar /tmp/openapi-generator-cli.jar version | grep -Fx "${OPENAPI_GENERATOR_VERSION}"
 
       - name: Generate ephemeral Dart client
@@ -70,7 +71,7 @@ jobs:
         working-directory: /tmp/devforge-dart-client
         run: |
           dart pub get
-          dart run build_runner build --delete-conflicting-outputs
+          dart run build_runner build
           dart analyze
 
       - name: Verify mobile contract parity
