@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .contracts import Actor
@@ -28,11 +27,10 @@ class SqlAlchemyRoleRepository:
     def assign(self, user_id: UUID, role: str) -> None:
         if self._db.get(User, user_id) is None:
             raise UserNotFound("user_not_found")
-        self._db.add(UserRole(user_id=user_id, role=role))
-        try:
+        key = {"user_id": user_id, "role": role}
+        if self._db.get(UserRole, key) is None:
+            self._db.add(UserRole(user_id=user_id, role=role))
             self._db.commit()
-        except IntegrityError:
-            self._db.rollback()
 
     def revoke(self, user_id: UUID, role: str) -> None:
         self._db.execute(
