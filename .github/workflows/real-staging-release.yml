@@ -40,7 +40,9 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           bash -n infrastructure/staging/scripts/*.sh
+          bash -n infrastructure/staging/tests/*.sh
           node --check infrastructure/staging/staging-e2e.mjs
+          bash infrastructure/staging/tests/deploy-release-test.sh
 
           STAGING_HOST=staging.example.com \
           STAGING_PUBLIC_ORIGIN=https://staging.example.com \
