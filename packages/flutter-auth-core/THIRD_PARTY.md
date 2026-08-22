@@ -30,11 +30,44 @@ The upstream BSD-3-Clause license and notices must be preserved where redistribu
 
 ## subosito/flutter-action
 
-- Use: CI-only Flutter SDK setup for `Flutter Auth Core CI`
+- Use: CI-only Flutter SDK setup for `Flutter Auth Core CI` and OpenAPI Dart parity checks
 - Upstream repository: `https://github.com/subosito/flutter-action`
 - Pinned revision: `1a449444c387b1966244ae4d4f8c696479add0b2`
 - License: MIT
 - Review date: 2026-08-22
 - Decision: APPROVED FOR EXPERIMENTAL CI USE at the pinned revision
 
-The workflow does not track a floating `@v2` reference. The action is pinned to the reviewed commit so upstream tag movement cannot silently change the CI executable. No action source code is copied into the DevForge repository.
+The workflows do not track a floating `@v2` reference. The action is pinned to the reviewed commit so upstream tag movement cannot silently change the CI executable. No action source code is copied into the DevForge repository.
+
+## OpenAPI Generator CLI / dart-dio
+
+- Maven artifact: `org.openapitools:openapi-generator-cli`
+- Approved version for this experimental proof: `7.24.0`
+- Upstream repository: `https://github.com/OpenAPITools/openapi-generator`
+- Distribution: Maven Central executable JAR over HTTPS
+- Generator: `dart-dio`
+- Generator status at review: STABLE
+- License: Apache-2.0
+- Review date: 2026-08-22
+- Decision: APPROVED FOR EPHEMERAL CONTRACT GENERATION/PARITY CI ONLY
+
+### Why this generator
+
+The `dart-dio` generator is the OpenAPI Generator Dart client option with bearer-token support and support for composite/union OpenAPI schemas. That makes it a better contract-generation proof for FastAPI OpenAPI 3.x than copying request/response models by hand.
+
+### Reused surface
+
+DevForge invokes the published CLI JAR with the committed `openapi-generator-config.json`. The generator consumes the deterministic backend OpenAPI document and writes a temporary Dart package in CI. No OpenAPI Generator source code is copied into this repository.
+
+### Security and adoption limits
+
+- generated code is not committed, published, or used as the authoritative mobile credential transport in this proof
+- the generated Dio/auth layer is not approved to replace `DevForgeMobileAuthClient` security behavior without a separate transport/security review
+- generated runtime dependencies such as Dio/built-value tooling are transient CI proof dependencies here; this review does not automatically approve them for a shipped product
+- mobile opaque session credentials must continue to use reviewed platform secure storage and the DevForge revocation/TLS/error-handling rules
+- generator version, generator type, serialization strategy, or generated-runtime adoption requires compatibility/security review
+- CI verifies the CLI reports version `7.24.0` before generation and fails if generation, serializer build, Dart analysis, or contract parity fails
+
+### Attribution
+
+OpenAPI Generator is Apache-2.0 licensed. If generated artifacts or generator-derived notices are later redistributed, release packaging must preserve any notices/attribution required by the generator and by generated runtime dependencies. This proof keeps generated output ephemeral.
