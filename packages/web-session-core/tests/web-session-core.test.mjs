@@ -78,6 +78,7 @@ test("start revalidates through the same-origin BFF without bearer access", asyn
   });
 
   monitor.start();
+  assert.equal(monitor.current().status, "checking");
   await flush();
 
   assert.equal(requests.length, 1);
@@ -113,7 +114,7 @@ test("401 becomes anonymous while transient upstream failure does not", async ()
   assert.equal(snapshot.errorCode, "session_revalidation_failed");
 });
 
-test("BFCache pageshow forces fresh session state before stale UI is trusted", async () => {
+test("BFCache pageshow gates stale UI synchronously and then resolves fresh state", async () => {
   const eventTarget = new FakeTarget();
   const visibilitySource = new FakeVisibility();
   const snapshots = [];
@@ -139,6 +140,9 @@ test("BFCache pageshow forces fresh session state before stale UI is trusted", a
   assert.equal(monitor.current().status, "authenticated");
 
   eventTarget.dispatch("pageshow", { persisted: true });
+  assert.equal(monitor.current().status, "checking");
+  assert.equal(monitor.current().source, "bfcache");
+  assert.equal(monitor.current().profile, null);
   await flush();
 
   const bfcacheChecking = snapshots.find(
@@ -172,6 +176,7 @@ test("visibility revalidation runs only when the document becomes visible", asyn
 
   visibilitySource.visibilityState = "visible";
   visibilitySource.dispatch("visibilitychange");
+  assert.equal(monitor.current().status, "checking");
   await flush();
   assert.equal(requests, 1);
   assert.equal(monitor.current().source, "visible");
