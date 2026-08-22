@@ -222,7 +222,7 @@ def _verify_schema(schema: dict[str, Any]) -> None:
     _require_fields(
         session_schema,
         "SessionResponse",
-        {"session_token", "token_type", "expires_in_seconds"},
+        {"session_token", "expires_in_seconds"},
     )
     session_properties = _properties(session_schema, "SessionResponse")
     token_type = session_properties.get("token_type")
