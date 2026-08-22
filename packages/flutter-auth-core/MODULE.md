@@ -75,20 +75,22 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 - Android/iOS platform setup for `flutter_secure_storage` must be verified in generated applications
 - this module is not a web auth transport; browser products use `web-bff-core`
 - generated `dart-dio` transport/auth helpers are contract evidence only and are not approved to replace the reviewed mobile credential boundary without a separate security/integration review
+- OpenAPI Generator `7.24.0` reports OpenAPI 3.1 support as beta; generator/schema upgrades therefore require revalidation
+- without an OpenAPI `servers` entry, generated output defaults to `http://localhost`; that generated base URL must never be treated as a production transport configuration
 
 ## OpenAPI-generated Dart parity proof
 
 `OpenAPI Dart Parity CI` performs a generation-only compatibility gate:
 
 1. installs backend-core and exports the deterministic FastAPI OpenAPI schema;
-2. runs OpenAPI Generator CLI `7.24.0` with the stable `dart-dio` generator and `openapi-generator-config.json`;
+2. downloads OpenAPI Generator CLI `7.24.0`, verifies its pinned SHA-256 and reported version, then runs the stable `dart-dio` generator with `openapi-generator-config.json`;
 3. resolves generated dependencies and builds generated serializers;
 4. runs `dart analyze` against the generated package;
 5. runs `scripts/verify_openapi_parity.py` against both the exported schema and generated Dart output.
 
 The verifier covers the five mobile auth/profile routes, expected success status codes, `DevForgeSession` bearer protection on authenticated operations, request/response schema references, credential length constraints, session metadata invariants, profile shape, and generated-source route/model markers.
 
-Generated output is placed in a temporary CI directory. It is not committed, distributed, or granted authority over secure session storage.
+Generated output is placed in a temporary CI directory. It is not committed, distributed, or granted authority over secure session storage. The proof uses the stable `built_value` serialization path. Optional/patch-only generator modes are not enabled because that combination produced invalid BuiltValue output for the nullable profile PATCH field in this generator version; the backend currently treats omitted and explicit-null `display_name` equivalently.
 
 ## Tests and quality gates
 
@@ -100,6 +102,7 @@ CI must run:
 - `flutter test`
 - Flutter dependency snapshot
 - deterministic backend OpenAPI export for parity jobs
+- checksum/version verification of the pinned OpenAPI Generator JAR
 - pinned OpenAPI Dart generation proof
 - generated Dart serializer build
 - generated Dart analysis
@@ -111,10 +114,11 @@ CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. 
 
 - Android and iOS device/emulator integration tests against real platform secure storage
 - reviewed integration of generated API contracts/signatures behind the existing secure mobile transport boundary
+- explicit production server/base-URL generation strategy before any generated transport is adopted
 - broader network/cancellation/background-resume failure paths
 - dependency advisory/release automation for the Flutter package ecosystem
 - at least one production-like pilot
 
 ## Upgrade notes
 
-Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, the storage provider, OpenAPI Generator version, generator type, or generated-runtime adoption require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
+Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, the storage provider, OpenAPI Generator version/checksum, generator type, serialization strategy, or generated-runtime adoption require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
