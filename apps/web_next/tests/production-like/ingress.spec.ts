@@ -14,11 +14,15 @@ test("TLS ingress sanitizes spoofable forwarding headers and preserves secure br
   expect(new URL(page.url()).protocol).toBe("https:");
   await expect(page.getByTestId("session-status")).toHaveText("anonymous");
 
-  const emails = [uniqueEmail("one"), uniqueEmail("two"), uniqueEmail("three")];
-  const spoofedAddresses = ["203.0.113.10", "198.51.100.20", "192.0.2.30"];
+  const firstEmail = uniqueEmail("one");
+  const attempts = [
+    { email: firstEmail, spoofedAddress: "203.0.113.10" },
+    { email: uniqueEmail("two"), spoofedAddress: "198.51.100.20" },
+    { email: uniqueEmail("three"), spoofedAddress: "192.0.2.30" },
+  ];
   const statuses: number[] = [];
 
-  for (let index = 0; index < emails.length; index += 1) {
+  for (const attempt of attempts) {
     const status = await page.evaluate(
       async ({ email, candidatePassword, spoofedAddress }) => {
         const response = await fetch("/api/auth/register", {
@@ -41,9 +45,9 @@ test("TLS ingress sanitizes spoofable forwarding headers and preserves secure br
         return response.status;
       },
       {
-        email: emails[index],
+        email: attempt.email,
         candidatePassword: password,
-        spoofedAddress: spoofedAddresses[index],
+        spoofedAddress: attempt.spoofedAddress,
       },
     );
     statuses.push(status);
@@ -51,7 +55,7 @@ test("TLS ingress sanitizes spoofable forwarding headers and preserves secure br
 
   expect(statuses).toEqual([201, 201, 429]);
 
-  await page.getByTestId("identifier").fill(emails[0]);
+  await page.getByTestId("identifier").fill(firstEmail);
   await page.getByTestId("password").fill(password);
 
   const loginResponsePromise = page.waitForResponse(
@@ -67,7 +71,7 @@ test("TLS ingress sanitizes spoofable forwarding headers and preserves secure br
   expect(loginBody).not.toHaveProperty("session_token");
 
   await expect(page.getByTestId("session-status")).toHaveText("authenticated");
-  await expect(page.getByTestId("signed-in-email")).toHaveText(emails[0]);
+  await expect(page.getByTestId("signed-in-email")).toHaveText(firstEmail);
 
   const cookies = await context.cookies();
   const sessionCookie = cookies.find((cookie) => cookie.name === "devforge_pilot_session");
@@ -89,7 +93,7 @@ test("TLS ingress sanitizes spoofable forwarding headers and preserves secure br
 
   await page.goto("/protected");
   await expect(page.getByTestId("session-status")).toHaveText("authenticated");
-  await expect(page.getByTestId("protected-secret")).toContainText(emails[0]);
+  await expect(page.getByTestId("protected-secret")).toContainText(firstEmail);
 
   await page.getByTestId("protected-logout").click();
   await expect(page.getByTestId("session-status")).toHaveText("anonymous");
