@@ -70,7 +70,8 @@ jobs:
           install -d -m 0700 /tmp/devforge-staging-secrets
           printf '%s\n' 'ci-postgres-password-not-a-real-secret' > "$STAGING_POSTGRES_PASSWORD_FILE"
           printf '%s\n' 'ci-redis-password-not-a-real-secret' > "$STAGING_REDIS_PASSWORD_FILE"
-          chmod 0600 "$STAGING_POSTGRES_PASSWORD_FILE" "$STAGING_REDIS_PASSWORD_FILE"
+          sudo chown "$(id -u):10001" "$STAGING_POSTGRES_PASSWORD_FILE" "$STAGING_REDIS_PASSWORD_FILE"
+          chmod 0640 "$STAGING_POSTGRES_PASSWORD_FILE" "$STAGING_REDIS_PASSWORD_FILE"
 
       - name: Validate staging Compose model
         run: docker compose -f infrastructure/staging/compose.yml config --quiet
