@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,7 +37,7 @@ class SqlAlchemyUserRepository:
         self._db.refresh(user)
         return self._to_actor(user)
 
-    def roles_for_user(self, user_id: object) -> tuple[str, ...]:
+    def roles_for_user(self, user_id: UUID) -> tuple[str, ...]:
         roles = self._db.scalars(
             select(UserRole.role).where(UserRole.user_id == user_id).order_by(UserRole.role)
         ).all()
