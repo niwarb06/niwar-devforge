@@ -51,10 +51,7 @@ final class DevForgeMobileAuthClient {
     final response = await _sendJson(
       'auth/session',
       method: 'POST',
-      body: <String, Object?>{
-        'identifier': identifier,
-        'password': password,
-      },
+      body: <String, Object?>{'identifier': identifier, 'password': password},
     );
     if (response.statusCode != 200) {
       throw _apiException(response);
@@ -64,13 +61,11 @@ final class DevForgeMobileAuthClient {
     final token = json['session_token'];
     final tokenType = json['token_type'];
     final expiresInSeconds = json['expires_in_seconds'];
-    if (
-      token is! String ||
-      token.length < 16 ||
-      tokenType != 'bearer' ||
-      expiresInSeconds is! int ||
-      expiresInSeconds <= 0
-    ) {
+    if (token is! String ||
+        token.length < 16 ||
+        tokenType != 'bearer' ||
+        expiresInSeconds is! int ||
+        expiresInSeconds <= 0) {
       throw const InvalidAuthResponse('invalid_session_response');
     }
 
@@ -105,10 +100,7 @@ final class DevForgeMobileAuthClient {
   Future<UserProfile> updateProfile({String? displayName}) async {
     final session = await _sessionVault.read();
     if (session == null) {
-      throw const AuthApiException(
-        statusCode: 401,
-        code: 'not_authenticated',
-      );
+      throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
     }
 
     final response = await _sendJson(
@@ -119,10 +111,7 @@ final class DevForgeMobileAuthClient {
     );
     if (response.statusCode == 401) {
       await _sessionVault.clear();
-      throw const AuthApiException(
-        statusCode: 401,
-        code: 'not_authenticated',
-      );
+      throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
     }
     if (response.statusCode != 200) {
       throw _apiException(response);
