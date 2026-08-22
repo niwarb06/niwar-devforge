@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from .contracts import Actor, RegisterCommand
 from .errors import EmailAlreadyExists
-from .models import User
+from .models import User, UserRole
 
 
 class SqlAlchemyUserRepository:
@@ -26,6 +26,8 @@ class SqlAlchemyUserRepository:
         )
         self._db.add(user)
         try:
+            self._db.flush()
+            self._db.add(UserRole(user_id=user.id, role="user"))
             self._db.commit()
         except IntegrityError as exc:
             self._db.rollback()
@@ -33,6 +35,16 @@ class SqlAlchemyUserRepository:
         self._db.refresh(user)
         return self._to_actor(user)
 
-    @staticmethod
-    def _to_actor(user: User) -> Actor:
-        return Actor(id=user.id, email=user.email, display_name=user.display_name, roles=("user",))
+    def roles_for_user(self, user_id: object) -> tuple[str, ...]:
+        roles = self._db.scalars(
+            select(UserRole.role).where(UserRole.user_id == user_id).order_by(UserRole.role)
+        ).all()
+        return tuple(roles)
+
+    def _to_actor(self, user: User) -> Actor:
+        return Actor(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            roles=self.roles_for_user(user.id),
+        )
