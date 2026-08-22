@@ -59,13 +59,18 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Ruff
-        run: ruff check src tests
+        run: ruff check src tests scripts
 
       - name: Mypy
         run: mypy src/devforge_core
 
       - name: Alembic upgrade
         run: alembic upgrade head
+
+      - name: OpenAPI export
+        run: |
+          python scripts/export_openapi.py --output /tmp/devforge-openapi.json
+          python -c 'import json; s=json.load(open("/tmp/devforge-openapi.json")); assert s["openapi"]; assert s["info"]["title"]'
 
       - name: Tests
         run: pytest --cov=devforge_core --cov-report=term-missing
