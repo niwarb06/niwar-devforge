@@ -13,7 +13,11 @@ from devforge_core.auth.abuse import (
     RedisFixedWindowRateLimiter,
 )
 from devforge_core.auth.contracts import Actor, LoginCommand, RegisterCommand
-from devforge_core.auth.errors import EmailAlreadyExists, InvalidCredentials, PasswordPolicyViolation
+from devforge_core.auth.errors import (
+    EmailAlreadyExists,
+    InvalidCredentials,
+    PasswordPolicyViolation,
+)
 from devforge_core.auth.repository import SqlAlchemyUserRepository
 from devforge_core.auth.security import Argon2Hasher
 from devforge_core.auth.service import AuthService
@@ -78,15 +82,17 @@ def _auth_service(db: Session) -> AuthService:
     )
 
 
+def _stable_bucket(value: str) -> str:
+    return sha256(value.strip().lower().encode("utf-8")).hexdigest()
+
+
 def _client_bucket(request: Request) -> str:
-    if request.client is None:
-        return "unknown"
-    return request.client.host
+    client = "unknown" if request.client is None else request.client.host
+    return _stable_bucket(client)
 
 
 def _identifier_bucket(identifier: str) -> str:
-    normalized = identifier.strip().lower().encode("utf-8")
-    return sha256(normalized).hexdigest()
+    return _stable_bucket(identifier)
 
 
 async def _enforce_credential_limits(
