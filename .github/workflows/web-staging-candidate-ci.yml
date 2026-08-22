@@ -1,0 +1,166 @@
+name: Web Staging Candidate CI
+
+on:
+  push:
+    paths:
+      - "infrastructure/staging/**"
+      - "generator/generate.mjs"
+      - "generator/manifests/web-auth-proof.json"
+      - "generator/templates/web-next-auth/**"
+      - "generator/tests/**"
+      - "packages/backend-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-staging-candidate-ci.yml"
+  pull_request:
+    paths:
+      - "infrastructure/staging/**"
+      - "generator/generate.mjs"
+      - "generator/manifests/web-auth-proof.json"
+      - "generator/templates/web-next-auth/**"
+      - "generator/tests/**"
+      - "packages/backend-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/web-staging-candidate-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  staging-proof:
+    runs-on: ubuntu-24.04
+    env:
+      STAGING_HOST: staging.localhost
+      STAGING_PUBLIC_ORIGIN: https://staging.localhost:8443
+      STAGING_HTTP_BIND: 127.0.0.1:8080
+      STAGING_HTTPS_BIND: 127.0.0.1:8443
+      STAGING_CADDYFILE: ./Caddyfile.ci
+      STAGING_POSTGRES_PASSWORD_FILE: /tmp/devforge-staging-secrets/postgres_password
+      STAGING_REDIS_PASSWORD_FILE: /tmp/devforge-staging-secrets/redis_password
+      STAGING_LOGIN_IP_LIMIT: "3"
+      STAGING_ALLOW_INTERNAL_CA: "1"
+      DEVFORGE_STAGING_ORIGIN: https://staging.localhost:8443
+      DEVFORGE_STAGING_ALLOW_INTERNAL_CA: "1"
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Tool versions
+        run: |
+          python --version
+          node --version
+          docker --version
+          docker compose version
+
+      - name: Create CI-only staging secrets and hostname
+        run: |
+          sudo sh -c 'printf "127.0.0.1 staging.localhost\n" >> /etc/hosts'
+          install -d -m 0700 /tmp/devforge-staging-secrets
+          printf '%s\n' 'ci-postgres-password-not-a-real-secret' > "$STAGING_POSTGRES_PASSWORD_FILE"
+          printf '%s\n' 'ci-redis-password-not-a-real-secret' > "$STAGING_REDIS_PASSWORD_FILE"
+          chmod 0600 "$STAGING_POSTGRES_PASSWORD_FILE" "$STAGING_REDIS_PASSWORD_FILE"
+
+      - name: Validate staging Compose model
+        run: docker compose -f infrastructure/staging/compose.yml config --quiet
+
+      - name: Generator unit tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Generate browser proof client
+        run: |
+          rm -rf .generated/staging-e2e
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-proof.json \
+            --output .generated/staging-e2e
+          cd .generated/staging-e2e
+          npm install
+          npm run typecheck
+          npm run build
+
+      - name: Audit generated runtime dependencies
+        working-directory: .generated/staging-e2e
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit backend Python dependencies
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit==2.10.1
+          pip-audit --strict packages/backend-core
+
+      - name: Install Chromium proof harness
+        working-directory: .generated/staging-e2e
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Build staging images
+        run: docker compose -f infrastructure/staging/compose.yml build backend web
+
+      - name: Start isolated staging stack
+        run: docker compose -f infrastructure/staging/compose.yml up -d
+
+      - name: Wait for public TLS endpoint
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl --insecure --fail --silent --show-error \
+              --max-time 5 "$STAGING_PUBLIC_ORIGIN/" >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker compose -f infrastructure/staging/compose.yml ps
+              docker compose -f infrastructure/staging/compose.yml logs --no-color
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Prove non-edge services are not host-published
+        run: |
+          for service in web backend postgres redis; do
+            container_id="$(docker compose -f infrastructure/staging/compose.yml ps -q "$service")"
+            test -n "$container_id"
+            test "$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$container_id")" = '{}'
+          done
+
+      - name: Staging health checks
+        run: bash infrastructure/staging/scripts/healthcheck.sh
+
+      - name: Staging TLS browser and trusted-ingress E2E
+        working-directory: .generated/staging-e2e
+        run: node ../../infrastructure/staging/staging-e2e.mjs
+
+      - name: Backup and non-destructive restore verification
+        run: |
+          backup_path="$(bash infrastructure/staging/scripts/backup.sh /tmp/devforge-staging-backups)"
+          bash infrastructure/staging/scripts/verify-restore.sh "$backup_path"
+
+      - name: Capture staging state
+        if: always()
+        run: |
+          docker compose -f infrastructure/staging/compose.yml ps || true
+          docker compose -f infrastructure/staging/compose.yml logs --no-color || true
+
+      - name: Stop staging stack
+        if: always()
+        run: docker compose -f infrastructure/staging/compose.yml down -v --remove-orphans || true
+
+  secret-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
