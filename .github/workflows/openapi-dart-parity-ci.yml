@@ -1,0 +1,80 @@
+name: OpenAPI Dart Parity CI
+
+on:
+  push:
+    paths:
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/openapi-dart-parity-ci.yml"
+  pull_request:
+    paths:
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/openapi-dart-parity-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Toolchain versions
+        run: |
+          python3 --version
+          java -version
+          dart --version
+          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+
+      - name: Install backend core
+        run: python3 -m pip install --disable-pip-version-check -e "packages/backend-core[dev]"
+
+      - name: Export backend OpenAPI
+        run: |
+          python3 packages/backend-core/scripts/export_openapi.py \
+            --output /tmp/devforge-openapi.json
+          python3 -c 'import json; s=json.load(open("/tmp/devforge-openapi.json")); assert s["openapi"]; assert s["info"]["title"]'
+
+      - name: Fetch pinned OpenAPI Generator
+        env:
+          OPENAPI_GENERATOR_VERSION: "7.24.0"
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://repo.maven.apache.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
+            -o /tmp/openapi-generator-cli.jar
+          sha256sum /tmp/openapi-generator-cli.jar
+          java -jar /tmp/openapi-generator-cli.jar version | grep -Fx "${OPENAPI_GENERATOR_VERSION}"
+
+      - name: Generate ephemeral Dart client
+        run: |
+          rm -rf /tmp/devforge-dart-client
+          java -jar /tmp/openapi-generator-cli.jar generate \
+            -g dart-dio \
+            -i /tmp/devforge-openapi.json \
+            -o /tmp/devforge-dart-client \
+            -c packages/flutter-auth-core/openapi-generator-config.json \
+            --global-property apiDocs=false,modelDocs=false,apiTests=false,modelTests=false
+          test -f /tmp/devforge-dart-client/pubspec.yaml
+          test -d /tmp/devforge-dart-client/lib
+
+      - name: Build and analyze generated Dart package
+        working-directory: /tmp/devforge-dart-client
+        run: |
+          dart pub get
+          dart run build_runner build --delete-conflicting-outputs
+          dart analyze
+
+      - name: Verify mobile contract parity
+        run: |
+          python3 packages/flutter-auth-core/scripts/verify_openapi_parity.py \
+            --schema /tmp/devforge-openapi.json \
+            --generated /tmp/devforge-dart-client
