@@ -20,8 +20,10 @@ class RolePermissionPolicy:
 DEFAULT_ROLE_PERMISSIONS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "user": frozenset({"profile.read:self", "profile.write:self"}),
-        "member": frozenset({"tenant.read", "profile.read:self", "profile.write:self"}),
-        "owner": frozenset({"tenant.read", "tenant.write", "tenant.members.manage"}),
+        "tenant:member": frozenset(
+            {"tenant.read", "profile.read:self", "profile.write:self"}
+        ),
+        "tenant:owner": frozenset({"tenant.read", "tenant.write", "tenant.members.manage"}),
         "admin": frozenset({"*"}),
     }
 )
