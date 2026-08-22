@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from devforge_core.api.contracts import UpdateProfileRequest
 from devforge_core.auth.contracts import Actor, LoginCommand, RegisterCommand
+from devforge_core.auth.errors import EmailAlreadyExists, InvalidCredentials, PasswordPolicyViolation
 from devforge_core.auth.models import Base
 from devforge_core.auth.permissions import default_authorization_policy
 from devforge_core.auth.repository import SqlAlchemyUserRepository
@@ -164,3 +165,44 @@ def test_auth_register_login_resolve_and_revoke() -> None:
 
         asyncio.run(sessions.revoke(raw_token))
         assert asyncio.run(sessions.resolve(raw_token)) is None
+
+
+def test_auth_service_uses_typed_errors() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    with factory() as db:
+        auth = AuthService(
+            users=SqlAlchemyUserRepository(db),
+            passwords=Argon2Hasher(),
+            sessions=DatabaseSessionIssuer(db),
+        )
+        email = f"typed-{uuid4()}@example.com"
+        command = RegisterCommand(email=email, password="correct-horse-battery-staple")
+        asyncio.run(auth.register(command))
+
+        try:
+            asyncio.run(auth.login(LoginCommand(identifier=email, password="wrong-password")))
+        except InvalidCredentials as exc:
+            assert exc.code == "invalid_credentials"
+        else:
+            raise AssertionError("invalid login must raise InvalidCredentials")
+
+        try:
+            asyncio.run(auth.register(RegisterCommand(email=email, password=command.password)))
+        except EmailAlreadyExists as exc:
+            assert exc.code == "email_already_exists"
+        else:
+            raise AssertionError("duplicate registration must raise EmailAlreadyExists")
+
+        try:
+            asyncio.run(auth.register(RegisterCommand(email=f"short-{uuid4()}@example.com", password="short")))
+        except PasswordPolicyViolation as exc:
+            assert exc.reason == "password_too_short"
+        else:
+            raise AssertionError("weak password must raise PasswordPolicyViolation")
