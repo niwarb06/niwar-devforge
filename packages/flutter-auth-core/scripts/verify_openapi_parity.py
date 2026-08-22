@@ -121,6 +121,23 @@ def _require_fields(component: dict[str, Any], name: str, expected: set[str]) ->
         raise ParityError(f"{name} is missing required fields: {sorted(missing)}")
 
 
+def _string_schema(value: dict[str, Any], field: str) -> dict[str, Any]:
+    if value.get("type") == "string":
+        return value
+
+    any_of = value.get("anyOf")
+    if isinstance(any_of, list):
+        string_variants = [
+            variant
+            for variant in any_of
+            if isinstance(variant, dict) and variant.get("type") == "string"
+        ]
+        if len(string_variants) == 1:
+            return string_variants[0]
+
+    raise ParityError(f"{field} must include exactly one string schema")
+
+
 def _require_string_bounds(
     properties: dict[str, Any],
     field: str,
@@ -131,9 +148,10 @@ def _require_string_bounds(
     value = properties.get(field)
     if not isinstance(value, dict):
         raise ParityError(f"missing property: {field}")
-    if minimum is not None and value.get("minLength") != minimum:
+    string_value = _string_schema(value, field)
+    if minimum is not None and string_value.get("minLength") != minimum:
         raise ParityError(f"{field}.minLength changed from {minimum}")
-    if maximum is not None and value.get("maxLength") != maximum:
+    if maximum is not None and string_value.get("maxLength") != maximum:
         raise ParityError(f"{field}.maxLength changed from {maximum}")
 
 
