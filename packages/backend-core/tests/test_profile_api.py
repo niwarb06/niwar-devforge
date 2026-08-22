@@ -65,6 +65,17 @@ def test_profile_route_requires_authentication() -> None:
     assert response.json() == {"code": "not_authenticated", "message": None}
 
 
+def test_invalid_session_token_is_rejected() -> None:
+    with _make_db() as db:
+        response = _client_with_db(db).get(
+            "/api/v1/users/me",
+            headers={"Authorization": "Bearer invalid-session-token"},
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"code": "not_authenticated", "message": None}
+
+
 def test_profile_routes_use_persisted_session_roles() -> None:
     with _make_db() as db:
         user, token = _create_session(db, role="admin")
@@ -83,6 +94,53 @@ def test_profile_routes_use_persisted_session_roles() -> None:
         )
         assert updated.status_code == 200
         assert updated.json()["display_name"] == "Updated Profile"
+
+
+def test_removed_persisted_role_revokes_profile_authorization() -> None:
+    with _make_db() as db:
+        user, token = _create_session(db)
+        role = db.get(UserRole, (user.id, "user"))
+        assert role is not None
+        db.delete(role)
+        db.commit()
+
+        response = _client_with_db(db).get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {"code": "permission_denied", "message": None}
+
+
+def test_disabled_user_cannot_use_existing_session() -> None:
+    with _make_db() as db:
+        user, token = _create_session(db)
+        user.is_active = False
+        db.commit()
+
+        response = _client_with_db(db).get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"code": "not_authenticated", "message": None}
+
+
+def test_explicit_zero_ttl_session_expires_immediately() -> None:
+    with _make_db() as db:
+        user, _token = _create_session(db)
+        actor = Actor(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            roles=("user",),
+        )
+        issuer = DatabaseSessionIssuer(db, ttl=timedelta(0))
+        token = asyncio.run(issuer.issue(actor))
+
+        assert asyncio.run(issuer.resolve(token)) is None
 
 
 def test_logout_revokes_current_session() -> None:
