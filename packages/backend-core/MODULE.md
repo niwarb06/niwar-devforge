@@ -81,6 +81,8 @@ Session tokens are opaque. Only token digests are persisted.
 - The `DevForgeSession` bearer scheme is for mobile/API/server-to-server transport. Browser JavaScript must not receive or persist opaque session credentials; web products use the server-mediated BFF + Secure/HttpOnly cookie design from `docs/16_AUTH_CORE_DECISION.md`.
 - Logout revokes the presented opaque session server-side.
 - Authentication and authorization failures use generic typed API errors and must not leak secrets or credentials.
+- Incoming `X-Request-ID` values are accepted only when they match the bounded safe character policy; malformed or oversized values are replaced with a server-generated UUID before logging or echoing.
+- DevForge logging is configured on the `devforge` logger without clearing host/root handlers, and repeated configuration does not add duplicate DevForge handlers.
 - Production secrets and database passwords must be supplied outside source control.
 
 ## OpenAPI and Generated Clients
@@ -89,7 +91,7 @@ FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, and OpenAPI security metadata. The module remains EXPERIMENTAL until broader credential-route/rate-limit tests, generated-client proof, web BFF transport, failure-path coverage, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, and OpenAPI security metadata. Observability tests cover malformed/oversized request-ID replacement plus idempotent logging configuration that preserves host handlers. The module remains EXPERIMENTAL until broader credential-route/rate-limit tests, generated-client proof, web BFF transport, failure-path coverage, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
