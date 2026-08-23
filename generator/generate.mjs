@@ -433,6 +433,25 @@ async function writePreparedPackageBundle(prepared, outputRoot) {
   return vendored;
 }
 
+async function configureStandaloneWebOutput(outputRoot) {
+  const packagePath = join(outputRoot, "package.json");
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  if (packageJson?.scripts?.build !== "next build --webpack") {
+    fail("web template build script no longer matches the standalone migration contract");
+  }
+  packageJson.scripts.build = "next build";
+  await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+
+  const readmePath = join(outputRoot, "README.md");
+  const readme = await readFile(readmePath, "utf8");
+  const legacyText = "The generated production build uses Next.js' supported `--webpack` mode because the current DevForge proof manifest installs reusable modules through local `file:` links outside the generated project root. This avoids baking repository-specific Turbopack roots into generated products. Re-evaluate the default bundler when reusable packages are distributed independently.";
+  const standaloneText = "This standalone output vendors verified reusable module artifacts inside the generated repository. `npm run build` therefore uses Next.js' default Turbopack build without a repository-specific root workaround.";
+  if (!readme.includes(legacyText)) {
+    fail("web template README no longer matches the standalone migration contract");
+  }
+  await writeFile(readmePath, readme.replace(legacyText, standaloneText), "utf8");
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
@@ -483,6 +502,10 @@ async function main() {
   const vendored_packages = preparedBundle
     ? await writePreparedPackageBundle(preparedBundle, outputRoot)
     : null;
+
+  if (preparedBundle && manifest.blueprint === "web-next-auth") {
+    await configureStandaloneWebOutput(outputRoot);
+  }
 
   const generationRecord = {
     schema_version: 1,
