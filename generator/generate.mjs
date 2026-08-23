@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { cp, copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import {
+  cp,
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -233,6 +243,25 @@ function safeDestination(root, path, label = "path") {
   return destination;
 }
 
+async function safeExistingSource(root, path, label) {
+  const lexical = safeDestination(root, path, label);
+  const lexicalInfo = await lstat(lexical);
+  if (lexicalInfo.isSymbolicLink()) fail(`${label} must not be a symbolic link`);
+
+  const rootReal = await realpath(root);
+  const sourceReal = await realpath(lexical);
+  const rel = relative(rootReal, sourceReal);
+  if (
+    !rel ||
+    rel.startsWith(`..${sep}`) ||
+    rel === ".." ||
+    isAbsolute(rel)
+  ) {
+    fail(`${label} resolves outside package bundle root`);
+  }
+  return { path: sourceReal, info: lexicalInfo };
+}
+
 function bundleDestinationForSpec(spec) {
   return spec.startsWith("file:./") ? spec.slice("file:./".length) : spec;
 }
@@ -272,8 +301,15 @@ async function hashDirectory(root) {
 }
 
 async function preparePackageBundle(bundleRoot, manifest, blueprint) {
-  const descriptorPath = join(bundleRoot, "bundle.json");
-  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const descriptorSource = await safeExistingSource(
+    bundleRoot,
+    "bundle.json",
+    "package bundle descriptor",
+  );
+  if (!descriptorSource.info.isFile()) {
+    fail("package bundle descriptor must be a regular file");
+  }
+  const descriptor = JSON.parse(await readFile(descriptorSource.path, "utf8"));
   assertPlainObject(descriptor, "package bundle");
   assertExactKeys(
     descriptor,
@@ -334,22 +370,21 @@ async function preparePackageBundle(bundleRoot, manifest, blueprint) {
       );
     }
 
-    const source = safeDestination(
+    const source = await safeExistingSource(
       bundleRoot,
       entry.source,
-      "package bundle source",
+      `package bundle modules.${moduleName}.source`,
     );
-    const sourceInfo = await stat(source);
     if (
-      (entry.kind === "file") !== sourceInfo.isFile() ||
-      (entry.kind === "directory") !== sourceInfo.isDirectory()
+      (entry.kind === "file") !== source.info.isFile() ||
+      (entry.kind === "directory") !== source.info.isDirectory()
     ) {
       fail(`package bundle modules.${moduleName} kind does not match source`);
     }
     const actualHash =
       entry.kind === "file"
-        ? await hashFile(source)
-        : await hashDirectory(source);
+        ? await hashFile(source.path)
+        : await hashDirectory(source.path);
     if (actualHash !== entry.sha256) {
       fail(`package bundle modules.${moduleName} failed SHA-256 verification`);
     }
@@ -357,7 +392,7 @@ async function preparePackageBundle(bundleRoot, manifest, blueprint) {
     prepared.push({
       moduleName,
       kind: entry.kind,
-      source,
+      source: source.path,
       destination: entry.destination,
       sha256: entry.sha256,
     });
@@ -382,6 +417,13 @@ async function writePreparedPackageBundle(prepared, outputRoot) {
         errorOnExist: true,
         force: false,
       });
+    }
+    const copiedHash =
+      entry.kind === "file"
+        ? await hashFile(destination)
+        : await hashDirectory(destination);
+    if (copiedHash !== entry.sha256) {
+      fail(`package bundle ${entry.moduleName} changed while being copied`);
     }
     vendored[entry.moduleName] = {
       destination: entry.destination,
