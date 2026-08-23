@@ -106,6 +106,11 @@ jobs:
           test -f .standalone-generated/flutter-first/vendor/niwar_devforge_flutter_auth-0.1.0/pubspec.yaml
           node - <<'NODE'
           const fs = require('fs');
+          const webPackage = JSON.parse(fs.readFileSync('.standalone-generated/web-first/package.json', 'utf8'));
+          if (webPackage.scripts?.build !== 'next build') throw new Error('standalone Web build script must use default Next.js build');
+          const webReadme = fs.readFileSync('.standalone-generated/web-first/README.md', 'utf8');
+          if (!webReadme.includes('default Turbopack')) throw new Error('standalone Web README must document default Turbopack');
+          if (webReadme.includes('Re-evaluate the default bundler')) throw new Error('legacy bundler note leaked into standalone output');
           for (const path of [
             '.standalone-generated/web-first/.devforge-generation.json',
             '.standalone-generated/flutter-first/.devforge-generation.json',
@@ -144,13 +149,13 @@ jobs:
           npm audit --audit-level=high
           npm run typecheck
 
-      - name: Build standalone Web product with default Turbopack
+      - name: Build standalone Web product with generated default Turbopack script
         working-directory: /tmp/devforge-standalone-web
         env:
           NODE_ENV: production
           DEVFORGE_PRODUCT_PUBLIC_ORIGIN: https://standalone.example.test
           DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://api.example.test/api/v1
-        run: npx next build
+        run: npm run build
 
       - name: Resolve and test standalone Flutter product
         working-directory: /tmp/devforge-standalone-flutter
@@ -167,9 +172,10 @@ jobs:
             echo
             echo '- Web reusable modules: versioned npm tarballs vendored inside generated repository'
             echo '- Flutter auth module: versioned package directory vendored inside generated repository'
-            echo '- Bundle artifacts: SHA-256 verified before generation'
+            echo '- Bundle artifacts: SHA-256 verified before generation and after copy'
+            echo '- Bundle source path: realpath-confined; symlink sources rejected'
             echo '- Parent monorepo package paths: absent'
             echo '- Generated products: initialized as clean standalone Git repositories'
-            echo '- Web: dependency audit + typecheck + Next.js default Turbopack build PASS'
+            echo '- Web: dependency audit + typecheck + generated npm build script using Next.js default Turbopack PASS'
             echo '- Flutter: dependency resolution + analyze + widget auth test PASS'
           } >> "$GITHUB_STEP_SUMMARY"
