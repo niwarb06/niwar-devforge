@@ -43,7 +43,7 @@ async function assertDeterministic(manifestPath, expectedBlueprint) {
     assert.deepEqual(await snapshot(first), await snapshot(second));
 
     const generation = JSON.parse(await readFile(join(first, ".devforge-generation.json"), "utf8"));
-    assert.equal(generation.generator_version, "0.2.0");
+    assert.equal(generation.generator_version, "0.3.0");
     assert.equal(generation.blueprint, expectedBlueprint);
     assert.equal("generated_at" in generation, false);
   } finally {
