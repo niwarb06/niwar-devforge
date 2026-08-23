@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -29,6 +29,10 @@ function run(bundle, output) {
     ],
     { encoding: "utf8" },
   );
+}
+
+async function assertMissing(path) {
+  await assert.rejects(stat(path), (error) => error?.code === "ENOENT");
 }
 
 async function makeWebBundle(root, { tamper = false, mismatch = false } = {}) {
@@ -66,36 +70,48 @@ test("verified package bundle is copied inside generated product", async () => {
     await makeWebBundle(bundle);
     const result = run(bundle, output);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(await readFile(join(output, "vendor", "web-bff-core-0.1.0.tgz"), "utf8"), "bff-package-proof\n");
-    const record = JSON.parse(await readFile(join(output, ".devforge-generation.json"), "utf8"));
+    assert.equal(
+      await readFile(join(output, "vendor", "web-bff-core-0.1.0.tgz"), "utf8"),
+      "bff-package-proof\n",
+    );
+    const record = JSON.parse(
+      await readFile(join(output, ".devforge-generation.json"), "utf8"),
+    );
     assert.equal(record.dependency_mode, "verified-vendored-bundle");
-    assert.match(record.vendored_packages["web-bff-core"].sha256, /^[0-9a-f]{64}$/);
+    assert.match(
+      record.vendored_packages["web-bff-core"].sha256,
+      /^[0-9a-f]{64}$/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("tampered bundle artifact fails SHA-256 verification", async () => {
+test("tampered bundle artifact fails before output is written", async () => {
   const root = await mkdtemp(join(tmpdir(), "devforge-bundle-tamper-"));
   try {
     const bundle = join(root, "bundle");
+    const output = join(root, "product");
     await makeWebBundle(bundle, { tamper: true });
-    const result = run(bundle, join(root, "product"));
+    const result = run(bundle, output);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /failed SHA-256 verification/);
+    await assertMissing(output);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("bundle destination must exactly match generated dependency spec", async () => {
+test("bundle destination mismatch fails before output is written", async () => {
   const root = await mkdtemp(join(tmpdir(), "devforge-bundle-destination-"));
   try {
     const bundle = join(root, "bundle");
+    const output = join(root, "product");
     await makeWebBundle(bundle, { mismatch: true });
-    const result = run(bundle, join(root, "product"));
+    const result = run(bundle, output);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /destination does not match/);
+    await assertMissing(output);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
