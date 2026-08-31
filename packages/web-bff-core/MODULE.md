@@ -57,14 +57,17 @@ Browser history/session restoration orchestration lives separately in `@niwar-de
 
 A second Chromium suite points the same BFF handlers at the real FastAPI `backend-core` running against migrated PostgreSQL and Redis. That proof exercises registration, login, current-profile read, profile update, protected-page access, and logout without enabling the in-process simulator. The opaque backend session credential remains confined to server-side BFF translation and the HttpOnly cookie boundary.
 
-This is real reusable-backend CI integration evidence, but not production-topology evidence.
+A third production-like CI suite places the real browser/BFF/backend path behind a TLS-terminating ingress harness. The ingress strips browser-supplied forwarding metadata, derives the connection peer address, supplies one private trusted client-address value to the reference BFF adapter, and the backend trusts only the narrow loopback proxy CIDR used by that host-local topology. Chromium verifies that spoofed forwarding headers do not split the configured registration IP rate-limit bucket, while login, Secure + HttpOnly cookie behavior, protected rendering, token non-exposure, and logout continue to pass. See `docs/18_PRODUCTION_LIKE_WEB_INGRESS_PROOF.md`.
+
+This is production-like CI evidence, not final staging/production topology evidence.
 
 ## Current limitations / promotion blockers
 
-- each production topology must prove ingress forwarding-header sanitization and exact BFF/proxy CIDR ownership/configuration
+- a real staging/production deployment must still prove exact ingress/BFF network isolation and owned proxy CIDRs; the host-local CI proof cannot establish those provider/network facts
+- two truly distinct deployed network clients behind the same BFF must still prove distinct real client rate-limit buckets
+- production secret delivery/rotation, observability, certificate/domain ownership, and rollback rehearsal remain deployment gates
 - a generator-produced product pilot and repeated product reuse are still required for higher maturity
-- no production-like deployment evidence yet, including TLS/ingress/secret-delivery/rollback proof
-- broader lifecycle/failure-path evidence should be repeated in that production-like topology
+- broader lifecycle/failure-path evidence should be repeated in the deployed production-like topology
 
 The package must not be promoted to TRUSTED until those items are closed and the module contract quality gates are met.
 
@@ -86,3 +89,4 @@ CI must verify:
 - invalid/multi-value resolver output fails closed before backend fetch
 - the deterministic Next.js browser pilot remains green for login/logout, history revocation, token non-exposure, and disabled-user behavior
 - the real-backend browser pilot remains green against FastAPI `backend-core`, PostgreSQL, and Redis
+- the production-like TLS ingress pilot remains green for forwarding-header sanitization, credential IP-rate-limit integrity, Secure cookie behavior, protected rendering, token non-exposure, and logout
