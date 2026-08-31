@@ -12,7 +12,7 @@ Build reusable, tested, documented, provider-neutral modules once, then compose 
 - Web and admin: Next.js / TypeScript
 - Backend: FastAPI / Python
 - Database: PostgreSQL
-- Cache and coordination: Redis where justified
+- Cache and coordination: Valkey through a Redis-compatible RESP/client contract where justified
 - Infrastructure: Docker
 - CI/CD: GitHub Actions
 
@@ -20,7 +20,7 @@ External providers for payments, notifications, storage, maps, OTP, verification
 
 ## Current status
 
-The repository is being built in ordered phases:
+The repository is under active development and is being built in ordered phases:
 
 1. Foundation and governance
 2. Source and OSS audit
@@ -32,7 +32,7 @@ The repository is being built in ordered phases:
 8. Security, QA, CI/CD hardening
 9. Pilot proof from generation to production
 
-See [`docs/01_ROADMAP_0_TO_100.md`](docs/01_ROADMAP_0_TO_100.md) for the full roadmap.
+See [`docs/01_ROADMAP_0_TO_100.md`](docs/01_ROADMAP_0_TO_100.md) for the full roadmap. Public source availability does not mean every module is stable or production-ready; module status and release gates remain authoritative.
 
 ## Repository model
 
@@ -47,6 +47,14 @@ The target monorepo contains runnable reference apps, provider-neutral packages,
 - Database changes are migration-driven and destructive production changes require explicit approval and rollback planning.
 - Generated or AI-written code is not trusted automatically; it must pass the same tests and quality gates as human-written code.
 - Reusable modules must remain product-neutral, documented, versioned, and independently testable.
+
+## Open-source use
+
+DevForge-owned source is licensed under the **Apache License 2.0**. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Apache-2.0 permits use, modification, redistribution, and commercial use subject to its terms, including preservation of required license and notice material. It does not relicense third-party dependencies or grant trademark rights beyond the license's limited terms.
+
+Third-party software remains under its own upstream licenses. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and module-specific third-party reviews before redistributing packages, containers, or generated products.
+
+For contributions, see [`CONTRIBUTING.md`](CONTRIBUTING.md). For vulnerabilities, follow [`SECURITY.md`](SECURITY.md) and do not disclose exploit details publicly. The current public-readiness boundary and release-time checks are documented in [`docs/19_OPEN_SOURCE_READINESS.md`](docs/19_OPEN_SOURCE_READINESS.md).
 
 ## Core governance docs
 
