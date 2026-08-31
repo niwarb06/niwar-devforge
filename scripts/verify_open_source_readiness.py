@@ -42,6 +42,7 @@ def verify_required_files() -> None:
         "scripts/verify_supply_chain_evidence.py",
         "supply-chain/flutter-license-policy.yaml",
         ".github/workflows/supply-chain-evidence-ci.yml",
+        ".github/workflows/required-pr-gate.yml",
     ):
         read(path)
 
@@ -191,6 +192,49 @@ def verify_supply_chain_controls() -> None:
             fail(f"supply-chain evidence verifier is missing fail-closed marker: {marker}")
 
 
+def verify_required_pr_gate() -> None:
+    workflow = read(".github/workflows/required-pr-gate.yml")
+    required_markers = (
+        "name: Required PR Gate",
+        "required-pr-gate",
+        "fetch-depth: 0",
+        "github.event.pull_request.head.sha || github.sha",
+        "git diff --check",
+        "python -m compileall -q scripts",
+        "python scripts/verify_open_source_readiness.py",
+    )
+    for marker in required_markers:
+        if marker not in workflow:
+            fail(f"required PR gate is missing reviewed marker: {marker}")
+
+    lines = workflow.splitlines()
+    trigger_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line == "  pull_request:"
+        ),
+        None,
+    )
+    if trigger_index is None:
+        fail("required PR gate must define a pull_request trigger")
+
+    child_lines: list[str] = []
+    for line in lines[trigger_index + 1 :]:
+        if line and not line.startswith(" "):
+            break
+        if line.startswith("  ") and not line.startswith("    "):
+            break
+        if line.strip():
+            child_lines.append(line)
+
+    if child_lines:
+        fail(
+            "required PR gate pull_request trigger must be unfiltered; "
+            "paths/branches filters can strand a required check"
+        )
+
+
 def main() -> None:
     verify_required_files()
     verify_package_metadata()
@@ -198,6 +242,7 @@ def main() -> None:
     verify_gitleaks_ignores()
     verify_open_server_baseline()
     verify_supply_chain_controls()
+    verify_required_pr_gate()
     print("Open-source readiness repository invariants: PASS")
 
 
