@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from collections.abc import Callable
 from time import perf_counter
 from uuid import uuid4
@@ -7,6 +8,9 @@ from uuid import uuid4
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
+
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+_DEVFORGE_HANDLER_MARKER = "_devforge_json_handler"
 
 
 class JsonFormatter(logging.Formatter):
@@ -24,12 +28,28 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging(level: str = "INFO") -> None:
+    resolved_level = level.upper()
+    logger = logging.getLogger("devforge")
+    logger.setLevel(resolved_level)
+    logger.propagate = False
+
+    for existing in logger.handlers:
+        if getattr(existing, _DEVFORGE_HANDLER_MARKER, False):
+            existing.setLevel(resolved_level)
+            existing.setFormatter(JsonFormatter())
+            return
+
     handler = logging.StreamHandler()
+    handler.setLevel(resolved_level)
     handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    root.setLevel(level.upper())
+    setattr(handler, _DEVFORGE_HANDLER_MARKER, True)
+    logger.addHandler(handler)
+
+
+def _resolve_request_id(candidate: str | None) -> str:
+    if candidate is not None and _REQUEST_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return str(uuid4())
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -42,7 +62,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         self._logger_factory = logger_factory or (lambda: logging.getLogger("devforge.request"))
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        request_id = _resolve_request_id(request.headers.get("X-Request-ID"))
         started = perf_counter()
         response = await call_next(request)
         duration_ms = round((perf_counter() - started) * 1000, 2)
