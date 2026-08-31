@@ -6,17 +6,17 @@ This gate closes the gap between the repository's high-level third-party invento
 
 ## Evidence produced
 
-`Supply Chain Evidence CI` regenerates the standalone Web and Flutter products from the same versioned DevForge package bundles used by the standalone distribution proof, installs their dependencies, installs the backend runtime in an isolated virtual environment, and records:
+`Supply Chain Evidence CI` checks out the exact pull-request head (rather than GitHub's synthetic merge ref), regenerates the standalone Web and Flutter products from the same versioned DevForge package bundles used by the standalone distribution proof, installs their dependencies, installs the backend runtime in an isolated virtual environment, and records:
 
 - exact source commit and tool versions;
 - full and runtime Web CycloneDX SBOMs plus the exact `package-lock.json`;
 - Web package-license scan output;
 - exact installed backend package list, backend CycloneDX SBOM, and backend package-license scan output;
-- Flutter `pubspec.lock`, full/runtime `dart pub deps --json` graphs, and a CycloneDX SBOM generated from the resolved lock state;
+- Flutter `pubspec.lock`, the full `dart pub deps --json` graph, a deterministically derived runtime-only JSON graph, and a CycloneDX SBOM generated from the resolved lock state;
 - a Flutter transitive license allowlist audit;
 - SHA-256 checksums over every evidence file.
 
-The workflow uploads this set as a GitHub Actions artifact named with the exact commit SHA. The CI artifact is short-lived evidence for review. A formal release must preserve the accepted evidence with the release or in another immutable retention location rather than relying on the CI retention period.
+The workflow uploads this set as a GitHub Actions artifact named with the exact reviewed source-head SHA. The CI artifact is short-lived evidence for review. A formal release must preserve the accepted evidence with the release or in another immutable retention location rather than relying on the CI retention period.
 
 ## Tooling and pinning
 
@@ -37,7 +37,11 @@ For Flutter, only the small set of licenses in `supply-chain/flutter-license-pol
 
 ## Flutter coverage note
 
-Trivy can generate an SBOM from Dart/Flutter lock data, but its Dart coverage does not provide package-license scanning. The Flutter evidence therefore combines four independent facts: the resolved `pubspec.lock`, full/runtime dependency graphs from Dart, a Trivy CycloneDX SBOM, and the transitive `license_checker` result. The lock/SBOM can conservatively include development dependencies; the separate `--no-dev` Dart graph records the runtime view.
+Trivy can generate an SBOM from Dart/Flutter lock data, but its Dart coverage does not provide package-license scanning. The Flutter evidence therefore combines four independent facts: the resolved `pubspec.lock`, dependency graphs from Dart, a Trivy CycloneDX SBOM, and the transitive `license_checker` result.
+
+Modern Dart's JSON dependency output already records `direct`, `dev`, and `transitive` dependency information and rejects combining `--json` with `--dev`/`--no-dev`. The workflow therefore captures `dart pub deps --json` once and `scripts/filter_dart_runtime_deps.py` derives the runtime closure by walking only the root package's runtime/direct dependencies and their transitive dependencies. The final verifier confirms that the runtime graph is a subset of the full graph, keeps the exact runtime/direct root set, and contains no root dev-only dependency leakage.
+
+The Trivy Dart lock SBOM can conservatively include development dependencies; the derived runtime graph is the separate runtime-only evidence view.
 
 ## Backend reproducibility note
 
@@ -51,6 +55,7 @@ Trivy can generate an SBOM from Dart/Flutter lock data, but its Dart coverage do
 - malformed or component-empty CycloneDX documents;
 - malformed Trivy license reports;
 - `UNKNOWN`/`CRITICAL` Web or backend license findings;
+- malformed/inconsistent Flutter full/runtime dependency graphs or dev-only leakage into the runtime graph;
 - missing tool/version markers;
 - malformed source commit metadata;
 - missing or mismatched SHA-256 evidence checksums.
