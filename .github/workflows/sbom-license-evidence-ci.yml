@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
+      DEVFORGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       TRIVY_VERSION: "0.74.0"
       TRIVY_DIGEST: "sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9"
       TRIVY_IMAGE: "ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9"
@@ -70,13 +71,13 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf sbom-runtime .sbom-evidence
-          mkdir -p sbom-runtime/python .sbom-evidence
+          mkdir -p sbom-runtime/python/site-packages .sbom-evidence
 
           python -m pip install \
             --disable-pip-version-check \
-            --target sbom-runtime/python \
+            --target sbom-runtime/python/site-packages \
             ./packages/backend-core
-          python -m pip freeze --path sbom-runtime/python \
+          python -m pip freeze --path sbom-runtime/python/site-packages \
             | LC_ALL=C sort > .sbom-evidence/python-freeze.txt
 
           for package in web-bff-core web-session-core; do
@@ -110,7 +111,7 @@ jobs:
             | tee .sbom-evidence/trivy-version.txt
           grep -F "Version: $TRIVY_VERSION" .sbom-evidence/trivy-version.txt
 
-      - name: Generate CycloneDX SBOM offline
+      - name: Generate repository CycloneDX SBOM offline
         run: |
           set -euo pipefail
           docker run --rm \
@@ -130,7 +131,26 @@ jobs:
             /workspace
           test -s .sbom-evidence/devforge.cdx.json
 
-      - name: Generate package license evidence offline
+      - name: Generate Python runtime CycloneDX SBOM offline
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/.sbom-evidence:/out:rw" \
+            -w /workspace \
+            "$TRIVY_IMAGE" \
+            fs \
+            --offline-scan \
+            --format cyclonedx \
+            --output /out/python-runtime.cdx.json \
+            /workspace/sbom-runtime/python/site-packages
+          test -s .sbom-evidence/python-runtime.cdx.json
+
+      - name: Generate repository package license evidence offline
         run: |
           set -euo pipefail
           docker run --rm \
@@ -150,6 +170,26 @@ jobs:
             --output /out/licenses.json \
             /workspace
           test -s .sbom-evidence/licenses.json
+
+      - name: Generate Python runtime license evidence offline
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/.sbom-evidence:/out:rw" \
+            -w /workspace \
+            "$TRIVY_IMAGE" \
+            fs \
+            --offline-scan \
+            --scanners license \
+            --format json \
+            --output /out/python-runtime-licenses.json \
+            /workspace/sbom-runtime/python/site-packages
+          test -s .sbom-evidence/python-runtime-licenses.json
 
       - name: Verify SBOM and license evidence invariants
         run: python scripts/verify_sbom_evidence.py
