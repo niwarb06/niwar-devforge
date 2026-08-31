@@ -11,6 +11,8 @@ on:
       - "packages/backend-core/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
+      - ".gitleaks.toml"
+      - ".gitleaksignore"
       - ".github/workflows/web-staging-candidate-ci.yml"
   pull_request:
     paths:
@@ -22,6 +24,8 @@ on:
       - "packages/backend-core/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
+      - ".gitleaks.toml"
+      - ".gitleaksignore"
       - ".github/workflows/web-staging-candidate-ci.yml"
 
 permissions:
