@@ -17,6 +17,12 @@ Third-party dependencies remain under their upstream licenses. `THIRD_PARTY_NOTI
 - external code must pass `docs/03_OSS_INTAKE_POLICY.md` before adoption;
 - `scripts/verify_open_source_readiness.py` machine-checks the repository-level invariants above.
 
+## Completed source-history security evidence
+
+On exact head `a594a1830aac4528ea753e5fd3d21ed20b03fca2`, Gitleaks 8.24.3 ran an all-refs Git-history scan over the repository heads/tags fetched by CI and scanned 406 reachable commits with zero remaining findings. The only earlier hit was verified as the pinned SHA-256 checksum for OpenAPI Generator, not a credential, and is suppressed only by an exact `commit:path:rule:line` fingerprint. The readiness guard rejects broad or malformed Gitleaks-ignore entries.
+
+This closes the repository-side full Git-history secret-scan requirement for that exact head. It does not authorize rewriting historical author metadata, and it does not replace release-time revalidation at the exact release SHA.
+
 ## Valkey migration boundary
 
 The service name and application configuration continue to use the existing `redis`/`DEVFORGE_REDIS_URL` compatibility contract so backend code does not need a product-level API migration. The server implementation is Valkey 7.2.14, which speaks the Redis-compatible RESP protocol used by redis-py.
@@ -40,7 +46,7 @@ Those actions remain subject to DevForge review and release gates.
 
 Before the first tagged/public package release:
 
-1. Run a full Git-history secret/privacy audit, not only a current-tree scan.
+1. Re-run the full current-tree, PR/range, and all-refs Git-history secret scan at the exact release SHA.
 2. Confirm GitHub private vulnerability reporting is enabled or document an equivalent private contact channel.
 3. Produce an exact transitive SBOM/license report for every distributed package/container.
 4. Verify all required third-party license/NOTICE material is included in each release artifact.
