@@ -190,6 +190,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gitleaks version)" = "8.24.3"
+          set +e
           gitleaks git \
             --redact \
             --exit-code=2 \
@@ -197,3 +198,21 @@ jobs:
             --report-path=/tmp/gitleaks-full-history.json \
             --log-opts="--all" \
             .
+          status=$?
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path('/tmp/gitleaks-full-history.json')
+          findings = json.loads(report.read_text(encoding='utf-8')) if report.exists() else []
+          print(f'Full-history Gitleaks findings: {len(findings)}')
+          for index, finding in enumerate(findings, 1):
+              print(
+                  f"finding {index}: rule={finding.get('RuleID', 'unknown')} "
+                  f"file={finding.get('File', 'unknown')} "
+                  f"commit={finding.get('Commit', 'unknown')} "
+                  f"line={finding.get('StartLine', 'unknown')}"
+              )
+          PY
+          exit "$status"
