@@ -56,7 +56,7 @@ jobs:
         with:
           flutter-version: "3.47.0"
           channel: stable
-          cache: true
+          cache: false
 
       - name: Tool versions
         run: |
@@ -71,14 +71,17 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf sbom-runtime .sbom-evidence
-          mkdir -p sbom-runtime/python/site-packages .sbom-evidence
+          mkdir -p sbom-runtime/python .sbom-evidence
 
-          python -m pip install \
+          python -m venv --copies sbom-runtime/python/venv
+          sbom-runtime/python/venv/bin/python -m pip install \
             --disable-pip-version-check \
-            --target sbom-runtime/python/site-packages \
             ./packages/backend-core
-          python -m pip freeze --path sbom-runtime/python/site-packages \
-            | LC_ALL=C sort > .sbom-evidence/python-freeze.txt
+          sbom-runtime/python/venv/bin/python -m pip list --format=freeze \
+            | LC_ALL=C sort > sbom-runtime/python/requirements.txt
+          cp sbom-runtime/python/requirements.txt .sbom-evidence/python-freeze.txt
+          grep -E '^fastapi==' sbom-runtime/python/requirements.txt
+          grep -E '^redis==' sbom-runtime/python/requirements.txt
 
           for package in web-bff-core web-session-core; do
             (
@@ -97,6 +100,7 @@ jobs:
           test -s packages/web-bff-core/package-lock.json
           test -s packages/web-session-core/package-lock.json
           test -s packages/flutter-auth-core/pubspec.lock
+          test -s sbom-runtime/python/requirements.txt
           test -s .sbom-evidence/python-freeze.txt
           test -s .sbom-evidence/flutter-pub-deps.json
 
@@ -131,7 +135,7 @@ jobs:
             /workspace
           test -s .sbom-evidence/devforge.cdx.json
 
-      - name: Generate Python runtime CycloneDX SBOM offline
+      - name: Generate Python requirements CycloneDX SBOM offline
         run: |
           set -euo pipefail
           docker run --rm \
@@ -147,7 +151,7 @@ jobs:
             --offline-scan \
             --format cyclonedx \
             --output /out/python-runtime.cdx.json \
-            /workspace/sbom-runtime/python/site-packages
+            /workspace/sbom-runtime/python/requirements.txt
           test -s .sbom-evidence/python-runtime.cdx.json
 
       - name: Generate repository package license evidence offline
@@ -171,7 +175,7 @@ jobs:
             /workspace
           test -s .sbom-evidence/licenses.json
 
-      - name: Generate Python runtime license evidence offline
+      - name: Generate Python virtualenv license evidence offline
         run: |
           set -euo pipefail
           docker run --rm \
@@ -179,6 +183,7 @@ jobs:
             --user "$(id -u):$(id -g)" \
             --cap-drop ALL \
             --security-opt no-new-privileges \
+            -e VIRTUAL_ENV=/workspace/sbom-runtime/python/venv \
             -v "$PWD:/workspace:ro" \
             -v "$PWD/.sbom-evidence:/out:rw" \
             -w /workspace \
@@ -188,7 +193,7 @@ jobs:
             --scanners license \
             --format json \
             --output /out/python-runtime-licenses.json \
-            /workspace/sbom-runtime/python/site-packages
+            /workspace/sbom-runtime/python
           test -s .sbom-evidence/python-runtime-licenses.json
 
       - name: Verify SBOM and license evidence invariants
