@@ -1,0 +1,245 @@
+name: Supply Chain Evidence CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/supply-chain-evidence-ci.yml"
+      - "distribution/**"
+      - "generator/**"
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - "scripts/verify_supply_chain_evidence.py"
+      - "supply-chain/**"
+  push:
+    paths:
+      - ".github/workflows/supply-chain-evidence-ci.yml"
+      - "distribution/**"
+      - "generator/**"
+      - "packages/backend-core/**"
+      - "packages/flutter-auth-core/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - "scripts/verify_supply_chain_evidence.py"
+      - "supply-chain/**"
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  transitive-sbom-license-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Install checksum-pinned evidence tooling
+        run: |
+          set -euo pipefail
+
+          rm -rf /tmp/devforge-trivy /tmp/devforge-evidence-tools
+          mkdir -p /tmp/devforge-trivy
+
+          curl -fsSLo /tmp/devforge-trivy/trivy.tar.gz \
+            https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz
+          echo "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  /tmp/devforge-trivy/trivy.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/devforge-trivy/trivy.tar.gz -C /tmp/devforge-trivy trivy
+          /tmp/devforge-trivy/trivy --version | grep -F "Version: 0.74.0"
+
+          python -m venv /tmp/devforge-evidence-tools
+          /tmp/devforge-evidence-tools/bin/python -m pip install --no-input "cyclonedx-bom==7.3.1"
+          /tmp/devforge-evidence-tools/bin/cyclonedx-py --version
+
+          dart pub global activate license_checker 1.6.2
+          test -x "$HOME/.pub-cache/bin/lic_ck"
+
+      - name: Build reusable Web packages
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          set -euo pipefail
+          for package in packages/web-bff-core packages/web-session-core; do
+            (
+              cd "$package"
+              npm install --no-audit --no-fund
+              npm run build
+            )
+          done
+
+      - name: Resolve reusable Flutter package
+        working-directory: packages/flutter-auth-core
+        run: flutter pub get
+
+      - name: Build versioned distribution bundles
+        run: |
+          set -euo pipefail
+          rm -rf .package-bundle
+          node distribution/build-auth-bundle.mjs .package-bundle
+          test -f .package-bundle/web/bundle.json
+          test -f .package-bundle/flutter/bundle.json
+
+      - name: Generate standalone evidence targets
+        run: |
+          set -euo pipefail
+          rm -rf .supply-chain-generated .supply-chain-evidence
+          mkdir -p .supply-chain-generated .supply-chain-evidence
+
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-standalone-proof.json \
+            --package-bundle .package-bundle/web \
+            --output .supply-chain-generated/web
+
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-standalone-proof.json \
+            --package-bundle .package-bundle/flutter \
+            --output .supply-chain-generated/flutter
+
+          git rev-parse HEAD > .supply-chain-evidence/source-commit.txt
+          {
+            echo "Trivy 0.74.0"
+            echo "CycloneDX Python 7.3.1"
+            echo "license_checker 1.6.2"
+            echo "Node $(node --version)"
+            echo "npm $(npm --version)"
+            flutter --version | head -n 1
+            dart --version 2>&1
+            python --version
+          } > .supply-chain-evidence/tool-versions.txt
+
+      - name: Collect exact Web dependency and license evidence
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          set -euo pipefail
+          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          cd .supply-chain-generated/web
+
+          npm install --no-audit --no-fund
+          test -f package-lock.json
+          cp package-lock.json "$EVIDENCE/web-package-lock.json"
+
+          npm sbom --sbom-format=cyclonedx --sbom-type=application \
+            > "$EVIDENCE/web-full.cdx.json"
+          npm sbom --sbom-format=cyclonedx --sbom-type=application --omit=dev \
+            > "$EVIDENCE/web-runtime.cdx.json"
+
+          /tmp/devforge-trivy/trivy fs \
+            --scanners license \
+            --pkg-types library \
+            --format json \
+            --output "$EVIDENCE/web-license.json" \
+            .
+
+      - name: Collect exact backend dependency and license evidence
+        run: |
+          set -euo pipefail
+          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          BACKEND_VENV="$GITHUB_WORKSPACE/.supply-chain-backend-venv"
+          SCAN_ROOT="$GITHUB_WORKSPACE/.supply-chain-backend-scan"
+
+          rm -rf "$BACKEND_VENV" "$SCAN_ROOT"
+          python -m venv "$BACKEND_VENV"
+          "$BACKEND_VENV/bin/python" -m pip install --no-input "$GITHUB_WORKSPACE/packages/backend-core"
+          "$BACKEND_VENV/bin/python" -m pip list --format=freeze | sort > "$EVIDENCE/backend-freeze.txt"
+
+          /tmp/devforge-evidence-tools/bin/cyclonedx-py environment \
+            "$BACKEND_VENV/bin/python" \
+            --spec-version 1.6 \
+            --output-format JSON \
+            --output-reproducible \
+            --output-file "$EVIDENCE/backend-runtime.cdx.json"
+
+          mkdir -p "$SCAN_ROOT"
+          cp "$EVIDENCE/backend-freeze.txt" "$SCAN_ROOT/requirements.txt"
+          VIRTUAL_ENV="$BACKEND_VENV" /tmp/devforge-trivy/trivy fs \
+            --scanners license \
+            --pkg-types library \
+            --format json \
+            --output "$EVIDENCE/backend-license.json" \
+            "$SCAN_ROOT"
+
+      - name: Collect exact Flutter dependency and license evidence
+        run: |
+          set -euo pipefail
+          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          cd .supply-chain-generated/flutter
+
+          flutter pub get
+          test -f pubspec.lock
+          cp pubspec.lock "$EVIDENCE/flutter-pubspec.lock"
+          dart pub deps --json > "$EVIDENCE/flutter-full-deps.json"
+          dart pub deps --no-dev --json > "$EVIDENCE/flutter-runtime-deps.json"
+
+          /tmp/devforge-trivy/trivy fs \
+            --format cyclonedx \
+            --output "$EVIDENCE/flutter-lock.cdx.json" \
+            .
+
+          NO_COLOR=1 TERM=dumb "$HOME/.pub-cache/bin/lic_ck" check-licenses \
+            --config "$GITHUB_WORKSPACE/supply-chain/flutter-license-policy.yaml" \
+            > "$EVIDENCE/flutter-license-audit.txt" 2>&1
+
+      - name: Seal and verify evidence
+        run: |
+          set -euo pipefail
+          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          (
+            cd "$EVIDENCE"
+            sha256sum \
+              source-commit.txt \
+              tool-versions.txt \
+              web-full.cdx.json \
+              web-runtime.cdx.json \
+              web-license.json \
+              web-package-lock.json \
+              backend-runtime.cdx.json \
+              backend-license.json \
+              backend-freeze.txt \
+              flutter-lock.cdx.json \
+              flutter-full-deps.json \
+              flutter-runtime-deps.json \
+              flutter-license-audit.txt \
+              flutter-pubspec.lock \
+              > SHA256SUMS
+          )
+
+          python scripts/verify_supply_chain_evidence.py "$EVIDENCE" | tee /tmp/devforge-supply-chain-summary.txt
+          {
+            echo "### Transitive supply-chain evidence"
+            echo
+            echo "Source commit: \`$(cat "$EVIDENCE/source-commit.txt")\`"
+            echo
+            echo '```text'
+            cat /tmp/devforge-supply-chain-summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact evidence bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: transitive-supply-chain-evidence-${{ github.sha }}
+          path: .supply-chain-evidence
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 9
