@@ -1,0 +1,165 @@
+name: SBOM License Evidence CI
+
+on:
+  push:
+    paths:
+      - "packages/**"
+      - "generator/**"
+      - "distribution/**"
+      - "infrastructure/**"
+      - "docs/20_TRIVY_SBOM_INTAKE.md"
+      - "scripts/verify_sbom_evidence.py"
+      - ".github/workflows/sbom-license-evidence-ci.yml"
+      - ".gitignore"
+  pull_request:
+    paths:
+      - "packages/**"
+      - "generator/**"
+      - "distribution/**"
+      - "infrastructure/**"
+      - "docs/20_TRIVY_SBOM_INTAKE.md"
+      - "scripts/verify_sbom_evidence.py"
+      - ".github/workflows/sbom-license-evidence-ci.yml"
+      - ".gitignore"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sbom-license-evidence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supply-chain-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TRIVY_VERSION: "0.74.0"
+      TRIVY_DIGEST: "sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9"
+      TRIVY_IMAGE: "ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Tool versions
+        run: |
+          set -euo pipefail
+          python --version
+          node --version
+          npm --version
+          flutter --version
+          docker --version
+
+      - name: Materialize exact dependency resolution
+        run: |
+          set -euo pipefail
+          rm -rf sbom-runtime .sbom-evidence
+          mkdir -p sbom-runtime/python .sbom-evidence
+
+          python -m pip install \
+            --disable-pip-version-check \
+            --target sbom-runtime/python \
+            ./packages/backend-core
+          python -m pip freeze --path sbom-runtime/python \
+            | LC_ALL=C sort > .sbom-evidence/python-freeze.txt
+
+          for package in web-bff-core web-session-core; do
+            (
+              cd "packages/$package"
+              npm install --ignore-scripts --no-audit --no-fund
+              npm ls --all --json > "../../.sbom-evidence/${package}-npm-tree.json"
+            )
+          done
+
+          (
+            cd packages/flutter-auth-core
+            flutter pub get
+            flutter pub deps --json > ../../.sbom-evidence/flutter-pub-deps.json
+          )
+
+          test -s packages/web-bff-core/package-lock.json
+          test -s packages/web-session-core/package-lock.json
+          test -s packages/flutter-auth-core/pubspec.lock
+          test -s .sbom-evidence/python-freeze.txt
+          test -s .sbom-evidence/flutter-pub-deps.json
+
+      - name: Pull and verify immutable Trivy image
+        run: |
+          set -euo pipefail
+          docker pull "$TRIVY_IMAGE"
+          docker image inspect "$TRIVY_IMAGE" --format '{{json .RepoDigests}}' \
+            | tee .sbom-evidence/trivy-repo-digests.json \
+            | grep -F "$TRIVY_DIGEST"
+          docker run --rm --network=none "$TRIVY_IMAGE" --version \
+            | tee .sbom-evidence/trivy-version.txt
+          grep -F "Version: $TRIVY_VERSION" .sbom-evidence/trivy-version.txt
+
+      - name: Generate CycloneDX SBOM offline
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/.sbom-evidence:/out:rw" \
+            -w /workspace \
+            "$TRIVY_IMAGE" \
+            fs \
+            --offline-scan \
+            --include-dev-deps \
+            --format cyclonedx \
+            --output /out/devforge.cdx.json \
+            /workspace
+          test -s .sbom-evidence/devforge.cdx.json
+
+      - name: Generate package license evidence offline
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network=none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/.sbom-evidence:/out:rw" \
+            -w /workspace \
+            "$TRIVY_IMAGE" \
+            fs \
+            --offline-scan \
+            --scanners license \
+            --include-dev-deps \
+            --format json \
+            --output /out/licenses.json \
+            /workspace
+          test -s .sbom-evidence/licenses.json
+
+      - name: Verify SBOM and license evidence invariants
+        run: python scripts/verify_sbom_evidence.py
+
+      - name: Upload supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: sbom-license-evidence-${{ github.sha }}
+          path: .sbom-evidence/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
