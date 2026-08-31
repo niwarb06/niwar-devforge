@@ -36,6 +36,10 @@ pnpm-debug.log*
 .pub-cache/
 build/
 
+# CI supply-chain evidence
+.sbom-runtime/
+.sbom-evidence/
+
 # IDE / OS
 .idea/
 .vscode/
