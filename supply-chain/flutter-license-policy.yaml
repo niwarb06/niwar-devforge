@@ -9,6 +9,15 @@ permittedLicenses:
   - MIT
   - Zlib
 
+# Flutter 3.47.0 ships these SDK packages from the flutter/flutter repository
+# without package-local LICENSE files. The exact SDK repository root LICENSE was
+# reviewed as BSD-3-Clause. Keep this exception package-specific; do not permit
+# arbitrary packages that lack license files.
+approvedPackages:
+  no-file:
+    - flutter_test
+    - flutter_web_plugins
+
 rejectedLicenses:
   - AGPL-3.0
   - AGPL-3.0-only
