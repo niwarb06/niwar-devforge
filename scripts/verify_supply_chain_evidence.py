@@ -28,6 +28,16 @@ EXPECTED_HASHED_FILES = (
     "flutter-pubspec.lock",
 )
 
+# Trivy 0.74.0 reports these SPDX licenses with severity UNKNOWN because its
+# license policy has no risk classification for them. They were reviewed as
+# permissive, but the exception is intentionally bound to the exact report,
+# package, installed version, and license expression. Any drift fails closed.
+REVIEWED_TRIVY_UNKNOWN_LICENSES = {
+    ("backend-license.json", "cffi", "2.1.1", "MIT-0"),
+    ("backend-license.json", "greenlet", "3.5.5", "MIT AND PSF-2.0"),
+    ("backend-license.json", "typing-extensions", "4.16.0", "PSF-2.0"),
+}
+
 
 def die(message: str) -> "NoReturn":
     raise SystemExit(f"supply-chain evidence verification failed: {message}")
@@ -49,6 +59,31 @@ def read_json(path: Path) -> Any:
         die(f"invalid JSON in {path.name}: {exc}")
 
 
+def normalize_package_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def parse_pip_freeze(path: Path) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for raw_line in read_text(path).splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if "==" not in line:
+            die(f"{path.name} contains a non-exact requirement: {line}")
+        name, version = line.split("==", 1)
+        name = normalize_package_name(name.strip())
+        version = version.strip()
+        if not name or not version:
+            die(f"{path.name} contains a malformed requirement: {line}")
+        if name in versions:
+            die(f"{path.name} contains duplicate package {name!r}")
+        versions[name] = version
+    if not versions:
+        die(f"{path.name} contains no installed packages")
+    return versions
+
+
 def verify_cyclonedx(path: Path) -> int:
     payload = read_json(path)
     if not isinstance(payload, dict):
@@ -66,7 +101,10 @@ def verify_cyclonedx(path: Path) -> int:
     return len(components)
 
 
-def verify_trivy_license_report(path: Path) -> tuple[int, int]:
+def verify_trivy_license_report(
+    path: Path,
+    package_versions: dict[str, str] | None = None,
+) -> tuple[int, int, int]:
     payload = read_json(path)
     if not isinstance(payload, dict):
         die(f"{path.name} is not a JSON object")
@@ -87,27 +125,55 @@ def verify_trivy_license_report(path: Path) -> tuple[int, int]:
     if not licenses:
         die(f"{path.name} contains no detected package licenses")
 
-    blocking = []
-    review = []
+    blocking: list[tuple[dict[str, Any], str]] = []
+    review: list[dict[str, Any]] = []
+    reviewed_unknown: list[dict[str, Any]] = []
     for item in licenses:
+        package_name = str(item.get("PkgName", "")).strip()
+        license_name = str(item.get("Name", "")).strip()
         severity = str(item.get("Severity", "UNKNOWN")).upper()
-        if severity in {"UNKNOWN", "CRITICAL"}:
-            blocking.append(item)
-        elif severity in {"HIGH", "MEDIUM"}:
+        if not package_name or not license_name:
+            blocking.append((item, "missing package/license identity"))
+            continue
+
+        if severity == "LOW":
+            continue
+        if severity in {"HIGH", "MEDIUM"}:
             review.append(item)
+            continue
+        if severity == "CRITICAL":
+            blocking.append((item, "critical license classification"))
+            continue
+        if severity == "UNKNOWN":
+            normalized_package = normalize_package_name(package_name)
+            version = ""
+            if package_versions is not None:
+                version = package_versions.get(normalized_package, "")
+            key = (path.name, normalized_package, version, license_name)
+            if key in REVIEWED_TRIVY_UNKNOWN_LICENSES:
+                reviewed_unknown.append(item)
+            else:
+                blocking.append((item, "unreviewed UNKNOWN classification"))
+            continue
+
+        blocking.append((item, f"unexpected Trivy severity {severity!r}"))
 
     if blocking:
         details = ", ".join(
             sorted(
                 {
-                    f"{item.get('PkgName', '?')}:{item.get('Name', '?')}:{item.get('Severity', '?')}"
-                    for item in blocking
+                    (
+                        f"{item.get('PkgName', '?')}@"
+                        f"{(package_versions or {}).get(normalize_package_name(str(item.get('PkgName', '?'))), '?')}:"
+                        f"{item.get('Name', '?')}:{item.get('Severity', '?')} ({reason})"
+                    )
+                    for item, reason in blocking
                 }
             )
         )
-        die(f"{path.name} has forbidden/unknown license findings: {details}")
+        die(f"{path.name} has forbidden/unreviewed license findings: {details}")
 
-    return len(licenses), len(review)
+    return len(licenses), len(review), len(reviewed_unknown)
 
 
 def verify_dart_graph(path: Path) -> tuple[str, set[str], dict[str, Any]]:
@@ -235,22 +301,30 @@ def main() -> int:
         "flutter-lock": verify_cyclonedx(root / "flutter-lock.cdx.json"),
     }
 
-    web_licenses, web_review = verify_trivy_license_report(root / "web-license.json")
-    backend_licenses, backend_review = verify_trivy_license_report(root / "backend-license.json")
+    backend_versions = parse_pip_freeze(root / "backend-freeze.txt")
+    web_licenses, web_review, web_reviewed_unknown = verify_trivy_license_report(
+        root / "web-license.json"
+    )
+    backend_licenses, backend_review, backend_reviewed_unknown = verify_trivy_license_report(
+        root / "backend-license.json", backend_versions
+    )
     flutter_full_count, flutter_runtime_count = verify_flutter_graphs(root)
 
     read_text(root / "web-package-lock.json")
-    read_text(root / "backend-freeze.txt")
     read_text(root / "flutter-license-audit.txt")
     read_text(root / "flutter-pubspec.lock")
     verify_hashes(root)
 
     print("Supply-chain evidence PASS")
     print("CycloneDX component counts:", json.dumps(cdx_counts, sort_keys=True))
-    print(f"Web licenses: {web_licenses} total; {web_review} require release review (HIGH/MEDIUM)")
+    print(
+        f"Web licenses: {web_licenses} total; {web_review} require release review (HIGH/MEDIUM); "
+        f"{web_reviewed_unknown} exact UNKNOWN mappings reviewed"
+    )
     print(
         f"Backend licenses: {backend_licenses} total; "
-        f"{backend_review} require release review (HIGH/MEDIUM)"
+        f"{backend_review} require release review (HIGH/MEDIUM); "
+        f"{backend_reviewed_unknown} exact UNKNOWN mappings reviewed"
     )
     print(
         f"Flutter dependency graph: {flutter_full_count} full / "
