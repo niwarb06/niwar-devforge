@@ -10,6 +10,7 @@ on:
       - "packages/flutter-auth-core/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
+      - "scripts/filter_dart_runtime_deps.py"
       - "scripts/verify_supply_chain_evidence.py"
       - "supply-chain/**"
   push:
@@ -21,6 +22,7 @@ on:
       - "packages/flutter-auth-core/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
+      - "scripts/filter_dart_runtime_deps.py"
       - "scripts/verify_supply_chain_evidence.py"
       - "supply-chain/**"
 
@@ -38,6 +40,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # PR workflows otherwise test GitHub's synthetic merge ref. Supply-chain
+          # evidence must be bound to the exact reviewed source head instead.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -101,8 +107,8 @@ jobs:
       - name: Generate standalone evidence targets
         run: |
           set -euo pipefail
-          rm -rf .supply-chain-generated .supply-chain-evidence
-          mkdir -p .supply-chain-generated .supply-chain-evidence
+          rm -rf .supply-chain-generated supply-chain-evidence
+          mkdir -p .supply-chain-generated supply-chain-evidence
 
           node generator/generate.mjs \
             --manifest generator/manifests/web-auth-standalone-proof.json \
@@ -114,7 +120,7 @@ jobs:
             --package-bundle .package-bundle/flutter \
             --output .supply-chain-generated/flutter
 
-          git rev-parse HEAD > .supply-chain-evidence/source-commit.txt
+          git rev-parse HEAD > supply-chain-evidence/source-commit.txt
           {
             echo "Trivy 0.74.0"
             echo "CycloneDX Python 7.3.1"
@@ -124,14 +130,14 @@ jobs:
             flutter --version | head -n 1
             dart --version 2>&1
             python --version
-          } > .supply-chain-evidence/tool-versions.txt
+          } > supply-chain-evidence/tool-versions.txt
 
       - name: Collect exact Web dependency and license evidence
         env:
           npm_config_ignore_scripts: "true"
         run: |
           set -euo pipefail
-          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          EVIDENCE="$GITHUB_WORKSPACE/supply-chain-evidence"
           cd .supply-chain-generated/web
 
           npm install --no-audit --no-fund
@@ -153,7 +159,7 @@ jobs:
       - name: Collect exact backend dependency and license evidence
         run: |
           set -euo pipefail
-          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          EVIDENCE="$GITHUB_WORKSPACE/supply-chain-evidence"
           BACKEND_VENV="$GITHUB_WORKSPACE/.supply-chain-backend-venv"
           SCAN_ROOT="$GITHUB_WORKSPACE/.supply-chain-backend-scan"
 
@@ -181,14 +187,20 @@ jobs:
       - name: Collect exact Flutter dependency and license evidence
         run: |
           set -euo pipefail
-          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          EVIDENCE="$GITHUB_WORKSPACE/supply-chain-evidence"
           cd .supply-chain-generated/flutter
 
           flutter pub get
           test -f pubspec.lock
           cp pubspec.lock "$EVIDENCE/flutter-pubspec.lock"
+
+          # Modern Dart's JSON form already records dependency kinds and rejects
+          # combining --json with --dev/--no-dev. Capture it once, then derive the
+          # runtime closure deterministically from directDependencies.
           dart pub deps --json > "$EVIDENCE/flutter-full-deps.json"
-          dart pub deps --no-dev --json > "$EVIDENCE/flutter-runtime-deps.json"
+          python "$GITHUB_WORKSPACE/scripts/filter_dart_runtime_deps.py" \
+            "$EVIDENCE/flutter-full-deps.json" \
+            "$EVIDENCE/flutter-runtime-deps.json"
 
           /tmp/devforge-trivy/trivy fs \
             --format cyclonedx \
@@ -197,12 +209,12 @@ jobs:
 
           NO_COLOR=1 TERM=dumb "$HOME/.pub-cache/bin/lic_ck" check-licenses \
             --config "$GITHUB_WORKSPACE/supply-chain/flutter-license-policy.yaml" \
-            > "$EVIDENCE/flutter-license-audit.txt" 2>&1
+            2>&1 | tee "$EVIDENCE/flutter-license-audit.txt"
 
       - name: Seal and verify evidence
         run: |
           set -euo pipefail
-          EVIDENCE="$GITHUB_WORKSPACE/.supply-chain-evidence"
+          EVIDENCE="$GITHUB_WORKSPACE/supply-chain-evidence"
           (
             cd "$EVIDENCE"
             sha256sum \
@@ -238,8 +250,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: transitive-supply-chain-evidence-${{ github.sha }}
-          path: .supply-chain-evidence
+          name: transitive-supply-chain-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: supply-chain-evidence
           if-no-files-found: error
           retention-days: 14
           compression-level: 9
