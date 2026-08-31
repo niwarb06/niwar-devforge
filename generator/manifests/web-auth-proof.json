@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "blueprint": "web-next-auth",
+  "product": {
+    "slug": "generated-auth-proof",
+    "display_name": "Generated Auth Proof",
+    "package_name": "@devforge-proof/generated-auth-proof"
+  },
+  "modules": [
+    "web-bff-core",
+    "web-session-core"
+  ],
+  "package_specs": {
+    "web-bff-core": "file:../../packages/web-bff-core",
+    "web-session-core": "file:../../packages/web-session-core"
+  }
+}

@@ -1,0 +1,79 @@
+name: Generator Web Auth CI
+
+on:
+  push:
+    paths:
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/generator-web-auth-ci.yml"
+  pull_request:
+    paths:
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/generator-web-auth-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-web-auth-build:
+    runs-on: ubuntu-24.04
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DEVFORGE_PRODUCT_PUBLIC_ORIGIN: https://generated.example.test
+      DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://api.generated.example.test/api/v1
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Generator unit tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Build reusable web BFF core
+        working-directory: packages/web-bff-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Build reusable web session core
+        working-directory: packages/web-session-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Generate product twice
+        run: |
+          rm -rf .generated
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-proof.json \
+            --output .generated/first
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-proof.json \
+            --output .generated/second
+
+      - name: Prove deterministic output
+        run: diff -ru .generated/first .generated/second
+
+      - name: Install generated product
+        working-directory: .generated/first
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck generated product
+        working-directory: .generated/first
+        run: npm run typecheck
+
+      - name: Build generated product
+        working-directory: .generated/first
+        run: npm run build
