@@ -110,6 +110,74 @@ def verify_trivy_license_report(path: Path) -> tuple[int, int]:
     return len(licenses), len(review)
 
 
+def verify_dart_graph(path: Path) -> tuple[str, set[str], dict[str, Any]]:
+    payload = read_json(path)
+    if not isinstance(payload, dict):
+        die(f"{path.name} is not a JSON object")
+    root = payload.get("root")
+    packages = payload.get("packages")
+    if not isinstance(root, str) or not root:
+        die(f"{path.name} has no root package")
+    if not isinstance(packages, list) or not packages:
+        die(f"{path.name} has no packages")
+
+    names: set[str] = set()
+    root_package: dict[str, Any] | None = None
+    for package in packages:
+        if not isinstance(package, dict):
+            die(f"{path.name} contains a non-object package")
+        name = package.get("name")
+        if not isinstance(name, str) or not name:
+            die(f"{path.name} contains a package without a name")
+        if name in names:
+            die(f"{path.name} contains duplicate package {name!r}")
+        names.add(name)
+        if name == root:
+            root_package = package
+
+    if root_package is None:
+        die(f"{path.name} does not contain its root package")
+    return root, names, root_package
+
+
+def verify_flutter_graphs(root: Path) -> tuple[int, int]:
+    full_root, full_names, full_root_package = verify_dart_graph(root / "flutter-full-deps.json")
+    runtime_root, runtime_names, runtime_root_package = verify_dart_graph(
+        root / "flutter-runtime-deps.json"
+    )
+
+    if full_root != runtime_root:
+        die("Flutter full/runtime dependency graphs have different roots")
+    if not runtime_names.issubset(full_names):
+        unexpected = sorted(runtime_names - full_names)
+        die(f"Flutter runtime graph contains packages absent from full graph: {unexpected}")
+
+    full_dev = full_root_package.get("devDependencies", [])
+    full_direct = full_root_package.get("directDependencies", [])
+    runtime_direct = runtime_root_package.get("directDependencies", [])
+    runtime_dev = runtime_root_package.get("devDependencies", [])
+    for field_name, value in (
+        ("full devDependencies", full_dev),
+        ("full directDependencies", full_direct),
+        ("runtime directDependencies", runtime_direct),
+        ("runtime devDependencies", runtime_dev),
+    ):
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            die(f"Flutter {field_name} is not a package-name list")
+
+    if runtime_dev:
+        die("Flutter runtime graph still declares devDependencies")
+    if set(runtime_direct) != set(full_direct):
+        die("Flutter runtime graph changed the root runtime/direct dependency set")
+
+    dev_only = set(full_dev) - set(full_direct)
+    leaked_dev = sorted(dev_only & runtime_names)
+    if leaked_dev:
+        die(f"Flutter runtime graph retains dev-only packages: {', '.join(leaked_dev)}")
+
+    return len(full_names), len(runtime_names)
+
+
 def verify_hashes(root: Path) -> None:
     manifest_path = root / "SHA256SUMS"
     manifest = read_text(manifest_path)
@@ -148,7 +216,15 @@ def main() -> int:
         die("source-commit.txt is not a full Git SHA")
 
     tool_versions = read_text(root / "tool-versions.txt")
-    for marker in ("Trivy 0.74.0", "license_checker 1.6.2", "Node", "npm", "Flutter", "Dart", "Python"):
+    for marker in (
+        "Trivy 0.74.0",
+        "license_checker 1.6.2",
+        "Node",
+        "npm",
+        "Flutter",
+        "Dart",
+        "Python",
+    ):
         if marker not in tool_versions:
             die(f"tool-versions.txt is missing {marker!r}")
 
@@ -161,11 +237,7 @@ def main() -> int:
 
     web_licenses, web_review = verify_trivy_license_report(root / "web-license.json")
     backend_licenses, backend_review = verify_trivy_license_report(root / "backend-license.json")
-
-    for json_name in ("flutter-full-deps.json", "flutter-runtime-deps.json"):
-        payload = read_json(root / json_name)
-        if not isinstance(payload, dict) or not payload:
-            die(f"{json_name} is empty or not an object")
+    flutter_full_count, flutter_runtime_count = verify_flutter_graphs(root)
 
     read_text(root / "web-package-lock.json")
     read_text(root / "backend-freeze.txt")
@@ -179,6 +251,10 @@ def main() -> int:
     print(
         f"Backend licenses: {backend_licenses} total; "
         f"{backend_review} require release review (HIGH/MEDIUM)"
+    )
+    print(
+        f"Flutter dependency graph: {flutter_full_count} full / "
+        f"{flutter_runtime_count} runtime packages"
     )
     print("Flutter license_checker allowlist: PASS")
     return 0
