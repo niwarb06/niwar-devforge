@@ -38,6 +38,7 @@ def verify_required_files() -> None:
         "THIRD_PARTY_NOTICES.md",
         "docs/19_OPEN_SOURCE_READINESS.md",
         "docs/20_TRANSITIVE_SUPPLY_CHAIN_EVIDENCE.md",
+        "scripts/filter_dart_runtime_deps.py",
         "scripts/verify_supply_chain_evidence.py",
         "supply-chain/flutter-license-policy.yaml",
         ".github/workflows/supply-chain-evidence-ci.yml",
@@ -149,6 +150,7 @@ def verify_open_server_baseline() -> None:
 def verify_supply_chain_controls() -> None:
     workflow = read(".github/workflows/supply-chain-evidence-ci.yml")
     policy = read("supply-chain/flutter-license-policy.yaml")
+    dart_filter = read("scripts/filter_dart_runtime_deps.py")
     verifier = read("scripts/verify_supply_chain_evidence.py")
 
     required_workflow_markers = (
@@ -158,11 +160,18 @@ def verify_supply_chain_controls() -> None:
         "license_checker 1.6.2",
         "npm sbom",
         "flutter pub get",
+        "github.event.pull_request.head.sha || github.sha",
+        "filter_dart_runtime_deps.py",
+        "path: supply-chain-evidence",
         "SHA256SUMS",
     )
     for marker in required_workflow_markers:
         if marker not in workflow:
             fail(f"supply-chain evidence workflow is missing reviewed marker: {marker}")
+
+    for marker in ("directDependencies", "devDependencies", "runtime_roots"):
+        if marker not in dart_filter:
+            fail(f"Dart runtime dependency filter is missing reviewed marker: {marker}")
 
     for license_id in ("Apache-2.0", "BSD-3-Clause", "MIT"):
         if license_id not in policy:
@@ -171,7 +180,13 @@ def verify_supply_chain_controls() -> None:
         if license_id not in policy:
             fail(f"Flutter license policy is missing rejected license: {license_id}")
 
-    for marker in ("UNKNOWN", "CRITICAL", "checksum mismatch", "CycloneDX"):
+    for marker in (
+        "UNKNOWN",
+        "CRITICAL",
+        "checksum mismatch",
+        "CycloneDX",
+        "dev-only packages",
+    ):
         if marker not in verifier:
             fail(f"supply-chain evidence verifier is missing fail-closed marker: {marker}")
 
