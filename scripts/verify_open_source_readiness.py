@@ -7,6 +7,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+GITLEAKS_FINGERPRINT = re.compile(
+    r"^[0-9a-f]{40}:[^:\r\n]+:[A-Za-z0-9_.-]+:[1-9][0-9]*$"
+)
 APPROVED_GITHUB_ACTION_REFS = {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",  # v7.0.1, node24
     "actions/setup-node": "820762786026740c76f36085b0efc47a31fe5020",  # v7.0.0, node24
@@ -101,6 +104,24 @@ def verify_action_pins() -> None:
         )
 
 
+def verify_gitleaks_ignores() -> None:
+    path = ROOT / ".gitleaksignore"
+    if not path.exists():
+        return
+    if not path.is_file():
+        fail(".gitleaksignore must be a regular file")
+
+    entries = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if len(entries) != len(set(entries)):
+        fail(".gitleaksignore contains duplicate fingerprints")
+    for entry in entries:
+        if not GITLEAKS_FINGERPRINT.fullmatch(entry):
+            fail(
+                ".gitleaksignore entries must be exact commit:path:rule:line fingerprints; "
+                f"invalid entry: {entry}"
+            )
+
+
 def verify_open_server_baseline() -> None:
     paths = [
         ROOT / "infrastructure/dev/docker-compose.yml",
@@ -124,6 +145,7 @@ def main() -> None:
     verify_required_files()
     verify_package_metadata()
     verify_action_pins()
+    verify_gitleaks_ignores()
     verify_open_server_baseline()
     print("Open-source readiness repository invariants: PASS")
 
