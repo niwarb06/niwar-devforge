@@ -6,7 +6,7 @@ Status: PUBLIC SOURCE HARDENING — REPOSITORY POLICY READY; FORMAL RELEASE EVID
 
 DevForge-owned source is prepared for distribution under the Apache License, Version 2.0. The root `LICENSE` contains the license text and `NOTICE` contains DevForge attribution. Reusable package directories carry their own copies so independently distributed package artifacts do not depend on a parent monorepo checkout for license information.
 
-Third-party dependencies remain under their upstream licenses. `THIRD_PARTY_NOTICES.md` records the current direct/runtime and infrastructure boundaries; every formal release must verify the exact transitive dependency/license inventory actually shipped.
+Third-party dependencies remain under their upstream licenses. `THIRD_PARTY_NOTICES.md` records the current direct/runtime and infrastructure boundaries; every formal release must verify the exact transitive dependency/license inventory actually shipped. `docs/20_TRANSITIVE_SUPPLY_CHAIN_EVIDENCE.md` defines the machine-generated evidence gate for that review.
 
 ## Public repository security baseline
 
@@ -19,7 +19,7 @@ Third-party dependencies remain under their upstream licenses. `THIRD_PARTY_NOTI
 
 ## Completed source-history security evidence
 
-On exact head `a594a1830aac4528ea753e5fd3d21ed20b03fca2`, Gitleaks 8.24.3 ran an all-refs Git-history scan over the repository heads/tags fetched by CI and scanned 406 reachable commits with zero remaining findings. The only earlier hit was verified as the pinned SHA-256 checksum for OpenAPI Generator, not a credential, and is suppressed only by an exact `commit:path:rule:line` fingerprint. The readiness guard rejects broad or malformed Gitleaks-ignore entries.
+On hardened PR #31 head `d1a5679fe1259326ceede7a95c792ced60a9dd97`, Gitleaks 8.24.3 ran an all-refs Git-history scan over the repository heads/tags fetched by CI and scanned 407 reachable commits with zero remaining findings. The only earlier hit was verified as the pinned SHA-256 checksum for OpenAPI Generator, not a credential, and is suppressed only by an exact `commit:path:rule:line` fingerprint. The readiness guard rejects broad or malformed Gitleaks-ignore entries.
 
 This closes the repository-side full Git-history secret-scan requirement for that exact head. It does not authorize rewriting historical author metadata, and it does not replace release-time revalidation at the exact release SHA.
 
@@ -48,10 +48,10 @@ Before the first tagged/public package release:
 
 1. Re-run the full current-tree, PR/range, and all-refs Git-history secret scan at the exact release SHA.
 2. Confirm GitHub private vulnerability reporting is enabled or document an equivalent private contact channel.
-3. Produce an exact transitive SBOM/license report for every distributed package/container.
+3. Run `Supply Chain Evidence CI` at the exact release SHA, review its exact transitive SBOM/license evidence for every distributed runtime/product, and preserve the accepted evidence with the release.
 4. Verify all required third-party license/NOTICE material is included in each release artifact.
 5. Confirm maintainers have redistribution rights for any generalized internal-donor material promoted into the release.
 6. Review public branch protection/rulesets and least-privilege workflow permissions.
-7. Re-run current build, test, security, generator, staging-candidate, and open-source-readiness gates at the exact release SHA.
+7. Re-run current build, test, security, generator, staging-candidate, open-source-readiness, and supply-chain-evidence gates at the exact release SHA.
 
 Until those release-time checks are recorded, the repository may be publicly reusable under its source license, but no formal Production Candidate or production release claim should be inferred.
