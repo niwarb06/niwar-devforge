@@ -7,6 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+APPROVED_GITHUB_ACTION_REFS = {
+    "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",  # v7.0.1, node24
+    "actions/setup-node": "820762786026740c76f36085b0efc47a31fe5020",  # v7.0.0, node24
+    "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",  # v7.0.0, node24
+}
 
 
 def fail(message: str) -> None:
@@ -64,7 +69,8 @@ def verify_package_metadata() -> None:
 
 
 def verify_action_pins() -> None:
-    violations: list[str] = []
+    pin_violations: list[str] = []
+    approved_ref_violations: list[str] = []
     for workflow in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
         for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
             match = re.search(r"\buses:\s*([^\s#]+)", line)
@@ -74,13 +80,25 @@ def verify_action_pins() -> None:
             if target.startswith("./") or target.startswith("docker://"):
                 continue
             if "@" not in target:
-                violations.append(f"{workflow.relative_to(ROOT)}:{number}: {target}")
+                pin_violations.append(f"{workflow.relative_to(ROOT)}:{number}: {target}")
                 continue
-            ref = target.rsplit("@", 1)[1]
+            action_name, ref = target.rsplit("@", 1)
             if not SHA40.fullmatch(ref):
-                violations.append(f"{workflow.relative_to(ROOT)}:{number}: {target}")
-    if violations:
-        fail("remote GitHub Actions must use full commit SHAs:\n" + "\n".join(violations))
+                pin_violations.append(f"{workflow.relative_to(ROOT)}:{number}: {target}")
+                continue
+            approved_ref = APPROVED_GITHUB_ACTION_REFS.get(action_name)
+            if approved_ref is not None and ref != approved_ref:
+                approved_ref_violations.append(
+                    f"{workflow.relative_to(ROOT)}:{number}: {target}; expected {action_name}@{approved_ref}"
+                )
+
+    if pin_violations:
+        fail("remote GitHub Actions must use full commit SHAs:\n" + "\n".join(pin_violations))
+    if approved_ref_violations:
+        fail(
+            "GitHub-maintained setup actions must use the reviewed Node 24 refs:\n"
+            + "\n".join(approved_ref_violations)
+        )
 
 
 def verify_open_server_baseline() -> None:
