@@ -110,6 +110,23 @@ test("Flutter package path cannot be absolute or shell-like", async () => {
   }
 });
 
+test("Flutter vendored package path cannot traverse out of vendor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "devforge-generator-flutter-vendor-path-"));
+  try {
+    const manifest = JSON.parse(await readFile(flutterProofManifestPath, "utf8"));
+    manifest.package_specs["flutter-auth-core"] = "vendor/../flutter-auth-core";
+    const manifestPath = join(root, "manifest.json");
+    const output = join(root, "output");
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const run = runGenerator(manifestPath, output);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /safe relative package path/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("non-empty output directory is never overwritten", async () => {
   const root = await mkdtemp(join(tmpdir(), "devforge-generator-overwrite-"));
   try {

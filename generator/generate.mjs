@@ -49,7 +49,9 @@ function validateFlutterPackagePath(spec) {
   ) {
     return false;
   }
-  if (parts[0] === "vendor") return parts.length >= 2;
+  if (parts[0] === "vendor") {
+    return parts.length >= 2 && parts.slice(1).every((part) => part !== "..");
+  }
 
   let parentSegments = 0;
   while (parts[parentSegments] === "..") parentSegments += 1;
