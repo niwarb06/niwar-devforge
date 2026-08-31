@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Pinned Valkey container image version is not a secret"
+regexTarget = "match"
+regexes = ['''valkey/valkey:7\.2\.14-alpine''']
