@@ -2,6 +2,7 @@
   "name": "@niwar-devforge/web-bff-core",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Reusable same-origin web BFF auth transport for Niwar DevForge generated products.",
   "exports": {
@@ -13,7 +14,9 @@
   "files": [
     "dist",
     "MODULE.md",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
