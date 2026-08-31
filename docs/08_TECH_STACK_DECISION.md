@@ -27,9 +27,12 @@ Define the default stack for reusable DevForge products. Product-specific except
 
 ### Data
 - PostgreSQL as the system of record
-- Redis for cache, queues, locks, or ephemeral state when required
+- Valkey as the default cache/coordination server for queues, locks, or ephemeral state when required
+- Redis-compatible RESP/client contracts may be retained behind DevForge boundaries when they preserve portability
 - Versioned migrations
 - Explicit audit/ledger models for sensitive state
+
+Valkey is the default server baseline because its BSD-3-Clause licensing keeps the reusable foundation OSI-open-source while preserving compatibility with the current redis-py client contract. A product may use another compatible server only after documenting license, operational, security, and migration implications.
 
 ### Infrastructure
 - Docker for reproducible local/staging/production services
