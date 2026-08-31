@@ -1,0 +1,23 @@
+# Conservative allowlist for generated Flutter product dependency audits.
+# license_checker treats dependencies outside permittedLicenses/approvedPackages as unapproved.
+# Keep this list intentionally small; add a license only after reviewing the exact dependency and obligation.
+permittedLicenses:
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - ISC
+  - MIT
+  - Zlib
+
+rejectedLicenses:
+  - AGPL-3.0
+  - AGPL-3.0-only
+  - AGPL-3.0-or-later
+  - BUSL-1.1
+  - GPL-2.0
+  - GPL-2.0-only
+  - GPL-2.0-or-later
+  - GPL-3.0
+  - GPL-3.0-only
+  - GPL-3.0-or-later
+  - SSPL-1.0
