@@ -31,9 +31,11 @@ Adding another SBOM or license tool requires a concrete coverage gap; this workf
 
 ## License decision boundary
 
-For Web and backend dependencies, Trivy's full JSON license report is preserved. The machine verifier fails closed on `UNKNOWN` or `CRITICAL` license findings. `HIGH` and `MEDIUM` findings remain visible as release-review items rather than being globally ignored because reciprocal/restricted licenses can be legitimate dependencies with specific redistribution obligations. The existing Psycopg LGPL boundary is an example: it must remain visible and be handled according to its actual redistribution terms, not hidden by a broad ignore.
+For Web and backend dependencies, Trivy's full JSON license report is preserved. A `CRITICAL` finding fails the machine gate. `HIGH` and `MEDIUM` findings remain visible as release-review items rather than being globally ignored because reciprocal/restricted licenses can be legitimate dependencies with specific redistribution obligations. The existing Psycopg LGPL boundary is an example: it must remain visible and be handled according to its actual redistribution terms, not hidden by a broad ignore.
 
-For Flutter, only the small set of licenses in `supply-chain/flutter-license-policy.yaml` is permitted automatically. An unapproved/unrecognized license must fail the audit until the exact package and obligation are reviewed. Package-specific exceptions should be preferred over broadening the global allowlist when a legitimate dependency needs special treatment.
+Trivy's `UNKNOWN` severity means its policy has no risk classification for the detected license; it does not necessarily mean the license identity itself is unknown. The verifier therefore still fails closed on every `UNKNOWN` result unless the exact report + normalized package name + installed version + license expression has been explicitly reviewed in `REVIEWED_TRIVY_UNKNOWN_LICENSES`. The current backend exceptions are intentionally narrow: `cffi==2.1.1` / `MIT-0`, `greenlet==3.5.5` / `MIT AND PSF-2.0`, and `typing_extensions==4.16.0` / `PSF-2.0`. A version, package, expression, or report change requires a new review rather than inheriting a global allow.
+
+For Flutter, only the small set of licenses in `supply-chain/flutter-license-policy.yaml` is permitted automatically. An unapproved/unrecognized license must fail the audit until the exact package and obligation are reviewed. Package-specific exceptions should be preferred over broadening the global allowlist when a legitimate dependency needs special treatment. The two Flutter-SDK packages currently approved under `no-file` are exact package exceptions because their package directories do not carry separate license files and are covered by the reviewed Flutter SDK license boundary.
 
 ## Flutter coverage note
 
@@ -54,7 +56,8 @@ The Trivy Dart lock SBOM can conservatively include development dependencies; th
 - missing or empty evidence files;
 - malformed or component-empty CycloneDX documents;
 - malformed Trivy license reports;
-- `UNKNOWN`/`CRITICAL` Web or backend license findings;
+- `CRITICAL` Web/backend license findings, unreviewed `UNKNOWN` findings, or any unexpected Trivy severity;
+- drift in an explicitly reviewed `UNKNOWN` package/version/license mapping;
 - malformed/inconsistent Flutter full/runtime dependency graphs or dev-only leakage into the runtime graph;
 - missing tool/version markers;
 - malformed source commit metadata;
