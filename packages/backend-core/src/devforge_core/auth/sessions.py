@@ -18,7 +18,9 @@ class DatabaseSessionIssuer:
     def __init__(self, db: Session, ttl: timedelta | None = None) -> None:
         self._db = db
         settings = get_settings()
-        self._ttl = ttl or timedelta(minutes=settings.session_ttl_minutes)
+        self._ttl = (
+            ttl if ttl is not None else timedelta(minutes=settings.session_ttl_minutes)
+        )
 
     async def issue(self, actor: Actor) -> str:
         raw_token = token_urlsafe(48)
