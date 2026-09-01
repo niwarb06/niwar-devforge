@@ -1,0 +1,64 @@
+name: Production Candidate Evidence CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/production-candidate-evidence-ci.yml"
+      - "docs/evidence/web-production-candidate.json"
+      - "docs/14_WEB_PRODUCTION_CANDIDATE.md"
+      - "scripts/verify_web_production_candidate_evidence.py"
+      - "infrastructure/staging/scripts/monitor-staging.sh"
+      - "infrastructure/staging/scripts/rollback-release.sh"
+      - "infrastructure/staging/scripts/write-release-metadata.sh"
+      - "infrastructure/staging/tests/test-monitor-staging.sh"
+      - "infrastructure/staging/tests/test-rollback-release.sh"
+      - "infrastructure/staging/tests/test-release-metadata.sh"
+      - "infrastructure/staging/monitoring/**"
+  pull_request:
+    paths:
+      - ".github/workflows/production-candidate-evidence-ci.yml"
+      - "docs/evidence/web-production-candidate.json"
+      - "docs/14_WEB_PRODUCTION_CANDIDATE.md"
+      - "scripts/verify_web_production_candidate_evidence.py"
+      - "infrastructure/staging/scripts/monitor-staging.sh"
+      - "infrastructure/staging/scripts/rollback-release.sh"
+      - "infrastructure/staging/scripts/write-release-metadata.sh"
+      - "infrastructure/staging/tests/test-monitor-staging.sh"
+      - "infrastructure/staging/tests/test-rollback-release.sh"
+      - "infrastructure/staging/tests/test-release-metadata.sh"
+      - "infrastructure/staging/monitoring/**"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-controls:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate shell and Python syntax
+        run: |
+          set -euo pipefail
+          bash -n infrastructure/staging/scripts/monitor-staging.sh
+          bash -n infrastructure/staging/scripts/rollback-release.sh
+          bash -n infrastructure/staging/scripts/write-release-metadata.sh
+          bash -n infrastructure/staging/tests/test-monitor-staging.sh
+          bash -n infrastructure/staging/tests/test-rollback-release.sh
+          bash -n infrastructure/staging/tests/test-release-metadata.sh
+          python -m py_compile scripts/verify_web_production_candidate_evidence.py
+
+      - name: Verify Production Candidate evidence baseline
+        run: python scripts/verify_web_production_candidate_evidence.py
+
+      - name: Prove synthetic monitoring alert signal
+        run: bash infrastructure/staging/tests/test-monitor-staging.sh
+
+      - name: Prove release metadata record
+        run: bash infrastructure/staging/tests/test-release-metadata.sh
+
+      - name: Prove fail-closed rollback control plane
+        run: bash infrastructure/staging/tests/test-rollback-release.sh

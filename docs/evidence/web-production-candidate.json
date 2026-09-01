@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "pilot_id": "generated-web-auth",
+  "status": "open_not_reached",
+  "production_candidate": {
+    "source_sha": null,
+    "completed_at": null,
+    "seconds_from_pilot_pr_open": null,
+    "staging_origin": null,
+    "backend_image": null,
+    "web_image": null,
+    "real_staging_workflow_run_id": null,
+    "real_staging": {
+      "public_tls": "open",
+      "service_isolation": "open",
+      "browser_e2e": "open",
+      "backup_restore": "open"
+    },
+    "monitoring": {
+      "external_log_collection": "open",
+      "public_uptime_monitor": "open",
+      "backend_health_monitor": "open",
+      "alert_delivery_test": "open",
+      "evidence_reference": null
+    },
+    "rollback_drill": {
+      "status": "open",
+      "previous_release_source_sha": null,
+      "previous_backend_image": null,
+      "previous_web_image": null,
+      "backup_reference": null,
+      "completed_at": null,
+      "evidence_reference": null
+    },
+    "release_record": {
+      "migration_head": null,
+      "backup_checksum_reference": null,
+      "release_notes_reference": null,
+      "operator_reference": null
+    }
+  }
+}
