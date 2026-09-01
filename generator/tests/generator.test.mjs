@@ -43,7 +43,7 @@ async function assertDeterministic(manifestPath, expectedBlueprint) {
     assert.deepEqual(await snapshot(first), await snapshot(second));
 
     const generation = JSON.parse(await readFile(join(first, ".devforge-generation.json"), "utf8"));
-    assert.equal(generation.generator_version, "0.2.0");
+    assert.equal(generation.generator_version, "0.3.0");
     assert.equal(generation.blueprint, expectedBlueprint);
     assert.equal("generated_at" in generation, false);
   } finally {
@@ -98,6 +98,23 @@ test("Flutter package path cannot be absolute or shell-like", async () => {
   try {
     const manifest = JSON.parse(await readFile(flutterProofManifestPath, "utf8"));
     manifest.package_specs["flutter-auth-core"] = "/tmp/flutter-auth-core";
+    const manifestPath = join(root, "manifest.json");
+    const output = join(root, "output");
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const run = runGenerator(manifestPath, output);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /safe relative package path/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Flutter vendored package path cannot traverse out of vendor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "devforge-generator-flutter-vendor-path-"));
+  try {
+    const manifest = JSON.parse(await readFile(flutterProofManifestPath, "utf8"));
+    manifest.package_specs["flutter-auth-core"] = "vendor/../flutter-auth-core";
     const manifestPath = join(root, "manifest.json");
     const output = join(root, "output");
     await writeFile(manifestPath, JSON.stringify(manifest), "utf8");

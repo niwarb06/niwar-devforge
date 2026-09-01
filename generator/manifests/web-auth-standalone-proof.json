@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "blueprint": "web-next-auth",
+  "product": {
+    "slug": "standalone-auth-proof",
+    "display_name": "Standalone Auth Proof",
+    "package_name": "@devforge-proof/standalone-auth-proof"
+  },
+  "modules": [
+    "web-bff-core",
+    "web-session-core"
+  ],
+  "package_specs": {
+    "web-bff-core": "file:./vendor/web-bff-core-0.1.0.tgz",
+    "web-session-core": "file:./vendor/web-session-core-0.1.0.tgz"
+  }
+}

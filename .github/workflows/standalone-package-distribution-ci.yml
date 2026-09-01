@@ -1,0 +1,181 @@
+name: Standalone Package Distribution CI
+
+on:
+  push:
+    paths:
+      - "distribution/**"
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/standalone-package-distribution-ci.yml"
+  pull_request:
+    paths:
+      - "distribution/**"
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - "packages/flutter-auth-core/**"
+      - ".github/workflows/standalone-package-distribution-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  standalone-distribution-proof:
+    runs-on: ubuntu-24.04
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Generator regression tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Build reusable Web packages
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          set -euo pipefail
+          for package in packages/web-bff-core packages/web-session-core; do
+            (
+              cd "$package"
+              npm install --no-audit --no-fund
+              npm run build
+              npm test
+            )
+          done
+
+      - name: Validate reusable Flutter package
+        working-directory: packages/flutter-auth-core
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
+
+      - name: Build versioned package bundles
+        run: |
+          set -euo pipefail
+          rm -rf .package-bundle
+          node distribution/build-auth-bundle.mjs .package-bundle
+          test -f .package-bundle/web/bundle.json
+          test -f .package-bundle/flutter/bundle.json
+
+      - name: Generate standalone products twice
+        run: |
+          set -euo pipefail
+          rm -rf .standalone-generated
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-standalone-proof.json \
+            --package-bundle .package-bundle/web \
+            --output .standalone-generated/web-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/web-auth-standalone-proof.json \
+            --package-bundle .package-bundle/web \
+            --output .standalone-generated/web-second
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-standalone-proof.json \
+            --package-bundle .package-bundle/flutter \
+            --output .standalone-generated/flutter-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-standalone-proof.json \
+            --package-bundle .package-bundle/flutter \
+            --output .standalone-generated/flutter-second
+          diff -ru .standalone-generated/web-first .standalone-generated/web-second
+          diff -ru .standalone-generated/flutter-first .standalone-generated/flutter-second
+
+      - name: Prove generated dependency boundaries
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number --fixed-strings '../../packages/' .standalone-generated/web-first .standalone-generated/flutter-first
+          ! grep -R --line-number --fixed-strings '../packages/' .standalone-generated/web-first .standalone-generated/flutter-first
+          test -f .standalone-generated/web-first/vendor/web-bff-core-0.1.0.tgz
+          test -f .standalone-generated/web-first/vendor/web-session-core-0.1.0.tgz
+          test -f .standalone-generated/flutter-first/vendor/niwar_devforge_flutter_auth-0.1.0/pubspec.yaml
+          node - <<'NODE'
+          const fs = require('fs');
+          const webPackage = JSON.parse(fs.readFileSync('.standalone-generated/web-first/package.json', 'utf8'));
+          if (webPackage.scripts?.build !== 'next build') throw new Error('standalone Web build script must use default Next.js build');
+          const webReadme = fs.readFileSync('.standalone-generated/web-first/README.md', 'utf8');
+          if (!webReadme.includes('default Turbopack')) throw new Error('standalone Web README must document default Turbopack');
+          if (webReadme.includes('Re-evaluate the default bundler')) throw new Error('legacy bundler note leaked into standalone output');
+          for (const path of [
+            '.standalone-generated/web-first/.devforge-generation.json',
+            '.standalone-generated/flutter-first/.devforge-generation.json',
+          ]) {
+            const record = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (record.generator_version !== '0.3.0') throw new Error(`${path}: wrong generator version`);
+            if (record.dependency_mode !== 'verified-vendored-bundle') throw new Error(`${path}: not vendored`);
+            for (const item of Object.values(record.vendored_packages || {})) {
+              if (!item.destination.startsWith('vendor/')) throw new Error(`${path}: unsafe destination`);
+              if (!/^[0-9a-f]{64}$/.test(item.sha256)) throw new Error(`${path}: invalid digest`);
+            }
+          }
+          NODE
+
+      - name: Export into clean standalone Git repositories
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter
+          cp -R .standalone-generated/web-first /tmp/devforge-standalone-web
+          cp -R .standalone-generated/flutter-first /tmp/devforge-standalone-flutter
+          for repo in /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter; do
+            git -C "$repo" init -q
+            git -C "$repo" config user.email ci@example.invalid
+            git -C "$repo" config user.name DevForge-CI
+            git -C "$repo" add .
+            git -C "$repo" diff --cached --check
+          done
+          rm -rf .package-bundle .standalone-generated
+
+      - name: Install and audit standalone Web product
+        working-directory: /tmp/devforge-standalone-web
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm audit --audit-level=high
+          npm run typecheck
+
+      - name: Build standalone Web product with generated default Turbopack script
+        working-directory: /tmp/devforge-standalone-web
+        env:
+          NODE_ENV: production
+          DEVFORGE_PRODUCT_PUBLIC_ORIGIN: https://standalone.example.test
+          DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://api.example.test/api/v1
+        run: npm run build
+
+      - name: Resolve and test standalone Flutter product
+        working-directory: /tmp/devforge-standalone-flutter
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test test/auth_screen_test.dart --reporter expanded
+
+      - name: Record proof summary
+        run: |
+          {
+            echo '## Standalone package distribution proof'
+            echo
+            echo '- Web reusable modules: versioned npm tarballs vendored inside generated repository'
+            echo '- Flutter auth module: versioned package directory vendored inside generated repository'
+            echo '- Bundle artifacts: SHA-256 verified before generation and after copy'
+            echo '- Bundle source path: realpath-confined; symlink sources rejected'
+            echo '- Parent monorepo package paths: absent'
+            echo '- Generated products: initialized as clean standalone Git repositories'
+            echo '- Web: dependency audit + typecheck + generated npm build script using Next.js default Turbopack PASS'
+            echo '- Flutter: dependency resolution + analyze + widget auth test PASS'
+          } >> "$GITHUB_STEP_SUMMARY"

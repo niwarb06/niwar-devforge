@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "blueprint": "flutter-mobile-auth",
+  "product": {
+    "slug": "standalone-mobile-auth-proof",
+    "display_name": "Standalone Mobile Auth Proof",
+    "package_name": "standalone_mobile_auth_proof"
+  },
+  "modules": [
+    "flutter-auth-core"
+  ],
+  "package_specs": {
+    "flutter-auth-core": "vendor/niwar_devforge_flutter_auth-0.1.0"
+  }
+}
