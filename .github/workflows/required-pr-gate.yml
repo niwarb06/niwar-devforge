@@ -39,3 +39,6 @@ jobs:
 
       - name: Verify repository invariants
         run: python scripts/verify_open_source_readiness.py
+
+      - name: Verify Production Candidate evidence
+        run: python scripts/verify_web_production_candidate_evidence.py

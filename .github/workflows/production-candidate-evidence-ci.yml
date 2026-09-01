@@ -1,0 +1,91 @@
+name: Production Candidate Evidence CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/production-candidate-evidence-ci.yml"
+      - ".github/workflows/required-pr-gate.yml"
+      - "docs/14_WEB_PRODUCTION_CANDIDATE.md"
+      - "docs/evidence/web-production-candidate.json"
+      - "scripts/verify_web_production_candidate_evidence.py"
+      - "scripts/verify_open_source_readiness.py"
+      - "infrastructure/staging/REAL_STAGING_RELEASE.md"
+      - "infrastructure/staging/OPERABILITY.md"
+      - "infrastructure/staging/observability/staging_monitor.py"
+      - "infrastructure/staging/scripts/record-release-meta.sh"
+      - "infrastructure/staging/scripts/release_guard.py"
+      - "infrastructure/staging/scripts/rollback-release.sh"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/production-candidate-evidence-ci.yml"
+      - ".github/workflows/required-pr-gate.yml"
+      - "docs/14_WEB_PRODUCTION_CANDIDATE.md"
+      - "docs/evidence/web-production-candidate.json"
+      - "scripts/verify_web_production_candidate_evidence.py"
+      - "scripts/verify_open_source_readiness.py"
+      - "infrastructure/staging/REAL_STAGING_RELEASE.md"
+      - "infrastructure/staging/OPERABILITY.md"
+      - "infrastructure/staging/observability/staging_monitor.py"
+      - "infrastructure/staging/scripts/record-release-meta.sh"
+      - "infrastructure/staging/scripts/release_guard.py"
+      - "infrastructure/staging/scripts/rollback-release.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-candidate-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence-controls:
+    name: production-candidate-evidence
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate current production-candidate control syntax
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/verify_web_production_candidate_evidence.py \
+            infrastructure/staging/observability/staging_monitor.py \
+            infrastructure/staging/scripts/release_guard.py
+          bash -n infrastructure/staging/scripts/record-release-meta.sh
+          bash -n infrastructure/staging/scripts/rollback-release.sh
+
+      - name: Verify OPEN / NOT REACHED evidence baseline
+        run: python scripts/verify_web_production_candidate_evidence.py
+
+      - name: Prove premature Production Candidate claims fail closed
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = Path("docs/evidence/web-production-candidate.json")
+          target = Path("/tmp/premature-production-candidate.json")
+          data = json.loads(source.read_text(encoding="utf-8"))
+          data["status"] = "production_candidate"
+          target.write_text(json.dumps(data), encoding="utf-8")
+          PY
+
+          if python scripts/verify_web_production_candidate_evidence.py \
+            --evidence /tmp/premature-production-candidate.json; then
+            echo "premature Production Candidate claim was incorrectly accepted" >&2
+            exit 1
+          fi
