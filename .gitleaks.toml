@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Pinned Valkey container image version is not a secret"
+regexTarget = "line"
+regexes = ['''\bvalkey/valkey:7\.2\.14-alpine\b''']
