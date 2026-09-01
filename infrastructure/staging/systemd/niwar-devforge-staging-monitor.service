@@ -1,0 +1,29 @@
+[Unit]
+Description=Niwar DevForge staging external health monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=devforge-monitor
+Group=devforge-monitor
+EnvironmentFile=/etc/niwar-devforge/staging-monitor.env
+ExecStart=/usr/bin/python3 /opt/niwar-devforge-monitor/staging_monitor.py --origin ${STAGING_PUBLIC_ORIGIN} --state-file /var/lib/niwar-devforge-monitor/state.json --event-log /var/log/niwar-devforge-monitor/events.jsonl --interval-seconds 60 --timeout-seconds 10
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/niwar-devforge-monitor /var/log/niwar-devforge-monitor
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

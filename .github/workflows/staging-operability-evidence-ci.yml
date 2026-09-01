@@ -1,0 +1,75 @@
+name: Staging Operability Evidence CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/staging-operability-evidence-ci.yml"
+      - "infrastructure/staging/observability/**"
+      - "infrastructure/staging/scripts/**"
+      - "infrastructure/staging/tests/**"
+      - "infrastructure/staging/systemd/**"
+      - "infrastructure/staging/OPERABILITY.md"
+  pull_request:
+    paths:
+      - ".github/workflows/staging-operability-evidence-ci.yml"
+      - "infrastructure/staging/observability/**"
+      - "infrastructure/staging/scripts/**"
+      - "infrastructure/staging/tests/**"
+      - "infrastructure/staging/systemd/**"
+      - "infrastructure/staging/OPERABILITY.md"
+
+permissions:
+  contents: read
+
+jobs:
+  operability-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Python and shell syntax
+        run: |
+          set -euo pipefail
+          python -m compileall -q infrastructure/staging/observability infrastructure/staging/scripts infrastructure/staging/tests
+          bash -n infrastructure/staging/scripts/*.sh
+
+      - name: Operability unit tests
+        run: python -m unittest discover -s infrastructure/staging/tests -p 'test_*.py' -v
+
+      - name: Release metadata CLI proof
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          meta="$tmp/release.meta.json"
+          source_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          python infrastructure/staging/scripts/release_guard.py record \
+            --path "$meta" \
+            --source-sha "$source_sha" \
+            --backend-image ghcr.io/niwarb06/niwar-devforge/backend-staging@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            --web-image ghcr.io/niwarb06/niwar-devforge/web-staging@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
+            --database-schema-head 20260822190000_auth \
+            --workflow-run-id 123456
+          python infrastructure/staging/scripts/release_guard.py validate --path "$meta"
+          python infrastructure/staging/scripts/release_guard.py assert-source \
+            --path "$meta" \
+            --source-sha "$source_sha"
+          if python infrastructure/staging/scripts/release_guard.py assert-source \
+            --path "$meta" \
+            --source-sha dddddddddddddddddddddddddddddddddddddddd; then
+            echo "source mismatch unexpectedly allowed release selection" >&2
+            exit 1
+          fi
+          python infrastructure/staging/scripts/release_guard.py assert-schema-compatible \
+            --path "$meta" \
+            --current-schema-head 20260822190000_auth
+          if python infrastructure/staging/scripts/release_guard.py assert-schema-compatible \
+            --path "$meta" \
+            --current-schema-head newer_schema; then
+            echo "schema mismatch unexpectedly allowed rollback" >&2
+            exit 1
+          fi
