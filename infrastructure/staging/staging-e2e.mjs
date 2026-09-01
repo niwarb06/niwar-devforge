@@ -11,6 +11,14 @@ if (!baseURL?.startsWith("https://")) {
 }
 
 const allowInternalCa = process.env.DEVFORGE_STAGING_ALLOW_INTERNAL_CA === "1";
+const loginIpLimit = Number.parseInt(
+  process.env.DEVFORGE_STAGING_LOGIN_IP_LIMIT ?? process.env.STAGING_LOGIN_IP_LIMIT ?? "3",
+  10,
+);
+if (!Number.isInteger(loginIpLimit) || loginIpLimit < 2 || loginIpLimit > 100) {
+  throw new Error("staging login IP limit must be an integer between 2 and 100");
+}
+
 const password = "devforge-staging-proof-password";
 const email = `staging-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
 
@@ -96,21 +104,20 @@ try {
     false,
   );
 
-  // CI sets the backend login IP limit to 3. The successful login above consumes one
-  // request in the real client-IP bucket. These three requests attempt to spoof a
-  // different trusted-ingress address each time. If Caddy fails to overwrite the
-  // external header, all three remain 401. Correct overwrite + BFF forwarding makes
-  // the third request hit the shared real-IP bucket and return 429.
-  const spoofProbe = await page.evaluate(async () => {
+  // The successful login above consumes one request in the real client-IP bucket.
+  // Each following request attempts to spoof a different ingress address. Correct
+  // Caddy overwrite + BFF forwarding keeps all requests in the same real-IP bucket,
+  // so the final probe request reaches the configured IP limit and returns 429.
+  const spoofProbe = await page.evaluate(async (configuredLoginIpLimit) => {
     const results = [];
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < configuredLoginIpLimit; index += 1) {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "same-origin",
         cache: "no-store",
         headers: {
           "content-type": "application/json",
-          "x-devforge-ingress-client-ip": `198.51.100.${index + 10}`,
+          "x-devforge-ingress-client-ip": `198.51.100.${(index % 200) + 10}`,
         },
         body: JSON.stringify({
           identifier: `missing-${Date.now()}-${index}@example.test`,
@@ -120,13 +127,15 @@ try {
       results.push({ status: response.status, body: await response.json() });
     }
     return results;
-  });
+  }, loginIpLimit);
 
+  assert.equal(spoofProbe.length, loginIpLimit);
   assert.deepEqual(
-    spoofProbe.map((result) => result.status),
-    [401, 401, 429],
+    spoofProbe.slice(0, -1).map((result) => result.status),
+    Array(loginIpLimit - 1).fill(401),
   );
-  assert.equal(spoofProbe[2].body.code, "rate_limited");
+  assert.equal(spoofProbe.at(-1)?.status, 429);
+  assert.equal(spoofProbe.at(-1)?.body.code, "rate_limited");
 
   console.log("Staging web auth TLS, session, isolation-header and rate-limit proof passed.");
 } finally {
