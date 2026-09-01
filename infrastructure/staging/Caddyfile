@@ -1,0 +1,41 @@
+{
+  admin off
+}
+
+{$STAGING_HOST} {
+  encode zstd gzip
+
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+
+  reverse_proxy web:3000 {
+    # Never trust a client-supplied DevForge address header. The ingress owns it.
+    header_up -X-DevForge-Ingress-Client-IP
+    header_up X-DevForge-Ingress-Client-IP {client_ip}
+    header_up -Forwarded
+    header_up -X-Real-IP
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}
+
+https://backend.internal {
+  tls internal
+
+  reverse_proxy backend:8000 {
+    # The BFF emits a validated single-IP X-Forwarded-For value only for
+    # credential endpoints. Preserve that value across this private TLS hop.
+    header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+    header_up -Forwarded
+    header_up -X-Real-IP
+  }
+}

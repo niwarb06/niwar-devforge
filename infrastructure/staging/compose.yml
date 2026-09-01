@@ -1,0 +1,239 @@
+name: niwar-devforge-web-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine3.24
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: devforge
+      POSTGRES_USER: devforge
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      data:
+        ipv4_address: 172.30.22.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devforge -d devforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7.4.9-alpine3.21
+    restart: unless-stopped
+    secrets:
+      - redis_password
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        printf 'appendonly yes\nrequirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf
+        exec redis-server /tmp/redis.conf
+    volumes:
+      - redis_data:/data
+    networks:
+      data:
+        ipv4_address: 172.30.22.4
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  migrate:
+    image: ${STAGING_BACKEND_IMAGE:-niwar-devforge/backend-staging:local}
+    build:
+      context: ../..
+      dockerfile: infrastructure/staging/Dockerfile.backend
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DEVFORGE_ENVIRONMENT: staging
+      DEVFORGE_CORS_ORIGINS: "[]"
+    secrets:
+      - postgres_password
+      - redis_password
+    networks:
+      - data
+    command:
+      - sh
+      - -ec
+      - |
+        export DEVFORGE_DATABASE_URL="postgresql+psycopg://devforge:$$(cat /run/secrets/postgres_password)@postgres:5432/devforge"
+        export DEVFORGE_REDIS_URL="redis://:$$(cat /run/secrets/redis_password)@redis:6379/0"
+        exec alembic upgrade head
+
+  backend:
+    image: ${STAGING_BACKEND_IMAGE:-niwar-devforge/backend-staging:local}
+    build:
+      context: ../..
+      dockerfile: infrastructure/staging/Dockerfile.backend
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DEVFORGE_ENVIRONMENT: staging
+      DEVFORGE_API_PREFIX: /api/v1
+      DEVFORGE_CORS_ORIGINS: "[]"
+      DEVFORGE_LOG_LEVEL: INFO
+      DEVFORGE_SESSION_TTL_MINUTES: "10080"
+      DEVFORGE_CREDENTIAL_RATE_LIMIT_WINDOW_SECONDS: ${STAGING_RATE_LIMIT_WINDOW_SECONDS:-60}
+      DEVFORGE_LOGIN_IP_LIMIT: ${STAGING_LOGIN_IP_LIMIT:-10}
+      DEVFORGE_LOGIN_IDENTIFIER_LIMIT: ${STAGING_LOGIN_IDENTIFIER_LIMIT:-5}
+      DEVFORGE_REGISTER_IP_LIMIT: ${STAGING_REGISTER_IP_LIMIT:-5}
+      DEVFORGE_REGISTER_IDENTIFIER_LIMIT: ${STAGING_REGISTER_IDENTIFIER_LIMIT:-3}
+      DEVFORGE_TRUSTED_PROXY_CIDRS: '["172.30.20.2/32"]'
+    secrets:
+      - postgres_password
+      - redis_password
+    networks:
+      service:
+        ipv4_address: 172.30.20.4
+      data:
+        ipv4_address: 172.30.22.2
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command:
+      - sh
+      - -ec
+      - |
+        export DEVFORGE_DATABASE_URL="postgresql+psycopg://devforge:$$(cat /run/secrets/postgres_password)@postgres:5432/devforge"
+        export DEVFORGE_REDIS_URL="redis://:$$(cat /run/secrets/redis_password)@redis:6379/0"
+        exec python -m uvicorn devforge_core.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2).read()"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      STAGING_HOST: ${STAGING_HOST:?set STAGING_HOST}
+    ports:
+      - "${STAGING_HTTP_BIND:-80}:80"
+      - "${STAGING_HTTPS_BIND:-443}:443"
+      - "${STAGING_HTTPS_BIND:-443}:443/udp"
+    volumes:
+      - ${STAGING_CADDYFILE:-./Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.30.21.2
+      service:
+        ipv4_address: 172.30.20.2
+        aliases:
+          - backend.internal
+
+  caddy-ca-export:
+    image: caddy:2.11.4-alpine
+    restart: "no"
+    network_mode: none
+    depends_on:
+      caddy:
+        condition: service_started
+    volumes:
+      - caddy_data:/source:ro
+      - caddy_ca:/export
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        for attempt in $$(seq 1 60); do
+          if [ -f /source/caddy/pki/authorities/local/root.crt ]; then
+            cp /source/caddy/pki/authorities/local/root.crt /export/root.crt
+            chmod 0444 /export/root.crt
+            exit 0
+          fi
+          sleep 1
+        done
+        echo 'internal Caddy CA was not created' >&2
+        exit 1
+
+  web:
+    image: ${STAGING_WEB_IMAGE:-niwar-devforge/web-staging:local}
+    build:
+      context: ../..
+      dockerfile: infrastructure/staging/Dockerfile.web
+      args:
+        STAGING_PUBLIC_ORIGIN: ${STAGING_PUBLIC_ORIGIN:?set STAGING_PUBLIC_ORIGIN}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+      caddy-ca-export:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DEVFORGE_PRODUCT_PUBLIC_ORIGIN: ${STAGING_PUBLIC_ORIGIN:?set STAGING_PUBLIC_ORIGIN}
+      DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://backend.internal/api/v1
+      DEVFORGE_PRODUCT_TRUST_INGRESS_CLIENT_IP: "1"
+      NODE_EXTRA_CA_CERTS: /etc/devforge-ca/root.crt
+    volumes:
+      - caddy_ca:/etc/devforge-ca:ro
+    networks:
+      edge:
+        ipv4_address: 172.30.21.3
+      service:
+        ipv4_address: 172.30.20.3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+secrets:
+  postgres_password:
+    file: ${STAGING_POSTGRES_PASSWORD_FILE:?set STAGING_POSTGRES_PASSWORD_FILE}
+  redis_password:
+    file: ${STAGING_REDIS_PASSWORD_FILE:?set STAGING_REDIS_PASSWORD_FILE}
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  caddy_ca:
+
+networks:
+  edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.21.0/24
+  service:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24
+  data:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.22.0/24

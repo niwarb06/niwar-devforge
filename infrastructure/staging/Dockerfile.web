@@ -1,0 +1,42 @@
+FROM node:24.19.0-bookworm-slim AS builder
+
+WORKDIR /workspace
+
+COPY generator ./generator
+COPY packages/web-bff-core ./packages/web-bff-core
+COPY packages/web-session-core ./packages/web-session-core
+
+RUN cd packages/web-bff-core && npm install && npm run build
+RUN cd packages/web-session-core && npm install && npm run build
+
+RUN node generator/generate.mjs \
+      --manifest generator/manifests/web-auth-proof.json \
+      --output .generated/web
+
+ARG STAGING_PUBLIC_ORIGIN
+ENV NODE_ENV=production \
+    DEVFORGE_PRODUCT_PUBLIC_ORIGIN=${STAGING_PUBLIC_ORIGIN} \
+    DEVFORGE_PRODUCT_BACKEND_API_BASE_URL=https://backend.internal/api/v1 \
+    DEVFORGE_PRODUCT_TRUST_INGRESS_CLIENT_IP=1
+
+RUN cd .generated/web \
+    && npm install --include=dev \
+    && npm run typecheck \
+    && npm run build \
+    && npm prune --omit=dev
+
+FROM node:24.19.0-bookworm-slim AS runtime
+
+WORKDIR /workspace
+
+ENV NODE_ENV=production
+
+COPY --from=builder --chown=node:node /workspace/packages ./packages
+COPY --from=builder --chown=node:node /workspace/.generated/web ./.generated/web
+
+USER node
+WORKDIR /workspace/.generated/web
+
+EXPOSE 3000
+
+CMD ["./node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
