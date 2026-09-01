@@ -82,6 +82,7 @@ Session tokens are opaque. Only token digests are persisted.
 - Raw session tokens are never stored in the database.
 - Session resolution loads current persisted roles instead of trusting role state captured at login time.
 - Disabled users cannot resolve active sessions.
+- Explicit session TTL overrides, including zero-duration TTLs used by policy/tests, are preserved rather than replaced by the configured default.
 - Roles are persisted server-side; client-provided role state is not authoritative.
 - Tenant authorization validates active tenant boundaries and active memberships.
 - Tenant-scoped roles are namespaced so membership roles cannot be mistaken for global roles.
@@ -90,6 +91,8 @@ Session tokens are opaque. Only token digests are persisted.
 - Credential rate limiting fails closed with a generic `503 temporarily_unavailable` response if the Redis abuse-control backend is unavailable.
 - `X-Forwarded-For` is ignored unless the immediate peer belongs to `DEVFORGE_TRUSTED_PROXY_CIDRS`; the trusted chain is walked right-to-left and malformed chains fall back to the direct peer.
 - Catch-all trusted proxy networks are rejected so forwarding metadata cannot be made globally authoritative by configuration accident.
+- Incoming `X-Request-ID` values are accepted only when they match a bounded safe-character policy; malformed or oversized values are replaced with a server-generated UUID before logging or echoing.
+- DevForge JSON logging is attached to the `devforge` logger without clearing host/root handlers, and repeated configuration does not add duplicate DevForge handlers.
 - Duplicate registration uses a generic public error rather than exposing the persisted email-existence condition.
 - Credential responses are marked `Cache-Control: no-store`.
 - The `DevForgeSession` bearer scheme is for mobile/API/server-to-server transport. Browser JavaScript must not receive or persist opaque session credentials; web products use the server-mediated BFF + Secure/HttpOnly cookie design from `docs/16_AUTH_CORE_DECISION.md`.
@@ -105,7 +108,7 @@ FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, persisted-role session resolution, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. Client-address tests cover untrusted spoof rejection, trusted multi-hop resolution, malformed-chain fallback, CIDR normalization, and catch-all trust rejection. The module remains EXPERIMENTAL until topology-specific trusted-proxy deployment evidence, Flutter client proof, broader failure-path coverage, browser-history integration, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, invalid opaque session rejection, persisted-role session resolution, immediate authorization loss after persisted-role removal, disabled-user session rejection, explicit zero-duration session expiry, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. Client-address tests cover untrusted spoof rejection, trusted multi-hop resolution, malformed-chain fallback, CIDR normalization, and catch-all trust rejection. Observability tests cover safe request-ID preservation, malformed/oversized request-ID replacement, and idempotent logging configuration that preserves host/root handlers. The module remains EXPERIMENTAL until topology-specific trusted-proxy deployment evidence, broader production-like integration/failure-path coverage, browser-history integration, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
