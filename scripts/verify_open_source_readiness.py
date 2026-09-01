@@ -14,6 +14,7 @@ APPROVED_GITHUB_ACTION_REFS = {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",  # v7.0.1, node24
     "actions/setup-node": "820762786026740c76f36085b0efc47a31fe5020",  # v7.0.0, node24
     "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",  # v7.0.0, node24
+    "actions/upload-artifact": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",  # v7.0.1, node24
 }
 
 
@@ -36,6 +37,11 @@ def verify_required_files() -> None:
         "CONTRIBUTING.md",
         "THIRD_PARTY_NOTICES.md",
         "docs/19_OPEN_SOURCE_READINESS.md",
+        "docs/20_TRANSITIVE_SUPPLY_CHAIN_EVIDENCE.md",
+        "scripts/filter_dart_runtime_deps.py",
+        "scripts/verify_supply_chain_evidence.py",
+        "supply-chain/flutter-license-policy.yaml",
+        ".github/workflows/supply-chain-evidence-ci.yml",
     ):
         read(path)
 
@@ -99,7 +105,7 @@ def verify_action_pins() -> None:
         fail("remote GitHub Actions must use full commit SHAs:\n" + "\n".join(pin_violations))
     if approved_ref_violations:
         fail(
-            "GitHub-maintained setup actions must use the reviewed Node 24 refs:\n"
+            "reviewed GitHub-maintained actions must use the approved refs:\n"
             + "\n".join(approved_ref_violations)
         )
 
@@ -141,12 +147,57 @@ def verify_open_server_baseline() -> None:
             fail(f"{path} must pin Valkey 7.2.14-alpine")
 
 
+def verify_supply_chain_controls() -> None:
+    workflow = read(".github/workflows/supply-chain-evidence-ci.yml")
+    policy = read("supply-chain/flutter-license-policy.yaml")
+    dart_filter = read("scripts/filter_dart_runtime_deps.py")
+    verifier = read("scripts/verify_supply_chain_evidence.py")
+
+    required_workflow_markers = (
+        "Trivy 0.74.0",
+        "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a",
+        "cyclonedx-bom==7.3.1",
+        "license_checker 1.6.2",
+        "npm sbom",
+        "flutter pub get",
+        "github.event.pull_request.head.sha || github.sha",
+        "filter_dart_runtime_deps.py",
+        "path: supply-chain-evidence",
+        "SHA256SUMS",
+    )
+    for marker in required_workflow_markers:
+        if marker not in workflow:
+            fail(f"supply-chain evidence workflow is missing reviewed marker: {marker}")
+
+    for marker in ("directDependencies", "devDependencies", "runtime_roots"):
+        if marker not in dart_filter:
+            fail(f"Dart runtime dependency filter is missing reviewed marker: {marker}")
+
+    for license_id in ("Apache-2.0", "BSD-3-Clause", "MIT"):
+        if license_id not in policy:
+            fail(f"Flutter license policy is missing expected permissive license: {license_id}")
+    for license_id in ("AGPL-3.0", "GPL-3.0", "SSPL-1.0"):
+        if license_id not in policy:
+            fail(f"Flutter license policy is missing rejected license: {license_id}")
+
+    for marker in (
+        "UNKNOWN",
+        "CRITICAL",
+        "checksum mismatch",
+        "CycloneDX",
+        "dev-only packages",
+    ):
+        if marker not in verifier:
+            fail(f"supply-chain evidence verifier is missing fail-closed marker: {marker}")
+
+
 def main() -> None:
     verify_required_files()
     verify_package_metadata()
     verify_action_pins()
     verify_gitleaks_ignores()
     verify_open_server_baseline()
+    verify_supply_chain_controls()
     print("Open-source readiness repository invariants: PASS")
 
 
