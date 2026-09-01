@@ -4,20 +4,73 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const GENERATOR_VERSION = "0.1.0";
-const BLUEPRINT = "web-next-auth";
-const BLUEPRINT_MODULES = ["web-bff-core", "web-session-core"];
+const GENERATOR_VERSION = "0.2.0";
 const TOKEN_PATTERN = /\{\{([A-Z0-9_]+)\}\}/g;
 const SLUG_PATTERN = /^[a-z][a-z0-9-]{1,47}[a-z0-9]$/;
-const PACKAGE_PATTERN = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
-const SAFE_PACKAGE_SPEC_PATTERN = /^(?:file:\.{1,2}\/|[~^]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\S*$/;
+const NPM_PACKAGE_PATTERN = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
+const DART_PACKAGE_PATTERN = /^[a-z][a-z0-9_]{1,62}[a-z0-9]$/;
+const SAFE_NPM_SPEC_PATTERN = /^(?:file:\.{1,2}\/|[~^]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\S*$/;
 
 const generatorRoot = dirname(fileURLToPath(import.meta.url));
-const templatePath = join(generatorRoot, "templates", BLUEPRINT, "files.json");
 
 function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
 }
+
+function validateFlutterPackagePath(spec) {
+  if (
+    typeof spec !== "string" ||
+    spec.length < 4 ||
+    spec.length > 240 ||
+    isAbsolute(spec) ||
+    spec.includes("\\") ||
+    /[\r\n\0]/.test(spec)
+  ) {
+    return false;
+  }
+
+  const parts = spec.split("/");
+  let parentSegments = 0;
+  while (parts[parentSegments] === "..") parentSegments += 1;
+  if (parentSegments === 0 || parentSegments === parts.length) return false;
+
+  return parts.slice(parentSegments).every(
+    (part) =>
+      part.length > 0 &&
+      part !== "." &&
+      part !== ".." &&
+      /^[A-Za-z0-9._-]+$/.test(part),
+  );
+}
+
+const BLUEPRINTS = Object.freeze({
+  "web-next-auth": Object.freeze({
+    modules: Object.freeze(["web-bff-core", "web-session-core"]),
+    packageNamePattern: NPM_PACKAGE_PATTERN,
+    packageNameError: "product.package_name must be a lowercase scoped npm package name",
+    validatePackageSpec: (spec) =>
+      typeof spec === "string" &&
+      SAFE_NPM_SPEC_PATTERN.test(spec) &&
+      !/[\r\n\0]/.test(spec),
+    packageSpecError: (moduleName) =>
+      `package_specs.${moduleName} is not an allowed npm package spec`,
+    tokens: (manifest) => ({
+      WEB_BFF_SPEC: manifest.package_specs["web-bff-core"],
+      WEB_SESSION_SPEC: manifest.package_specs["web-session-core"],
+    }),
+  }),
+  "flutter-mobile-auth": Object.freeze({
+    modules: Object.freeze(["flutter-auth-core"]),
+    packageNamePattern: DART_PACKAGE_PATTERN,
+    packageNameError: "product.package_name must be a lowercase Dart package name",
+    validatePackageSpec: validateFlutterPackagePath,
+    packageSpecError: (moduleName) =>
+      `package_specs.${moduleName} must be a safe relative package path`,
+    tokens: (manifest) => ({
+      FLUTTER_AUTH_PATH: manifest.package_specs["flutter-auth-core"],
+    }),
+  }),
+});
 
 function parseArgs(argv) {
   const args = { manifest: null, output: null };
@@ -57,7 +110,10 @@ function validateManifest(value) {
   );
 
   if (value.schema_version !== 1) fail("schema_version must equal 1");
-  if (value.blueprint !== BLUEPRINT) fail(`blueprint must equal ${BLUEPRINT}`);
+  if (typeof value.blueprint !== "string" || !(value.blueprint in BLUEPRINTS)) {
+    fail(`blueprint must be one of ${JSON.stringify(Object.keys(BLUEPRINTS))}`);
+  }
+  const blueprint = BLUEPRINTS[value.blueprint];
 
   assertPlainObject(value.product, "product");
   assertExactKeys(value.product, new Set(["slug", "display_name", "package_name"]), "product");
@@ -75,29 +131,29 @@ function validateManifest(value) {
   }
   if (
     typeof value.product.package_name !== "string" ||
-    !PACKAGE_PATTERN.test(value.product.package_name)
+    !blueprint.packageNamePattern.test(value.product.package_name)
   ) {
-    fail("product.package_name must be a lowercase scoped npm package name");
+    fail(blueprint.packageNameError);
   }
 
   if (
     !Array.isArray(value.modules) ||
-    value.modules.length !== BLUEPRINT_MODULES.length ||
-    !BLUEPRINT_MODULES.every((moduleName, index) => value.modules[index] === moduleName)
+    value.modules.length !== blueprint.modules.length ||
+    !blueprint.modules.every((moduleName, index) => value.modules[index] === moduleName)
   ) {
-    fail(`modules must equal ${JSON.stringify(BLUEPRINT_MODULES)}`);
+    fail(`modules must equal ${JSON.stringify(blueprint.modules)}`);
   }
 
   assertPlainObject(value.package_specs, "package_specs");
-  assertExactKeys(value.package_specs, new Set(BLUEPRINT_MODULES), "package_specs");
-  for (const moduleName of BLUEPRINT_MODULES) {
+  assertExactKeys(value.package_specs, new Set(blueprint.modules), "package_specs");
+  for (const moduleName of blueprint.modules) {
     const spec = value.package_specs[moduleName];
-    if (typeof spec !== "string" || !SAFE_PACKAGE_SPEC_PATTERN.test(spec) || /[\r\n\0]/.test(spec)) {
-      fail(`package_specs.${moduleName} is not an allowed package spec`);
+    if (!blueprint.validatePackageSpec(spec)) {
+      fail(blueprint.packageSpecError(moduleName));
     }
   }
 
-  return value;
+  return { manifest: value, blueprint };
 }
 
 function validateTemplateFiles(value) {
@@ -123,6 +179,7 @@ function render(content, tokens, path) {
     if (!(token in tokens)) fail(`unknown template token ${token} in ${path}`);
     return tokens[token];
   });
+  TOKEN_PATTERN.lastIndex = 0;
   if (TOKEN_PATTERN.test(rendered)) fail(`unresolved template token in ${path}`);
   TOKEN_PATTERN.lastIndex = 0;
   return rendered.endsWith("\n") ? rendered : `${rendered}\n`;
@@ -153,7 +210,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
   const outputRoot = resolve(process.cwd(), args.output);
-  const manifest = validateManifest(JSON.parse(await readFile(manifestPath, "utf8")));
+  const validated = validateManifest(JSON.parse(await readFile(manifestPath, "utf8")));
+  const { manifest, blueprint } = validated;
+  const templatePath = join(generatorRoot, "templates", manifest.blueprint, "files.json");
   const templateFiles = validateTemplateFiles(JSON.parse(await readFile(templatePath, "utf8")));
 
   await ensureEmptyOutput(outputRoot);
@@ -163,8 +222,7 @@ async function main() {
     PRODUCT_NAME: manifest.product.display_name,
     PRODUCT_SLUG: manifest.product.slug,
     PACKAGE_NAME: manifest.product.package_name,
-    WEB_BFF_SPEC: manifest.package_specs["web-bff-core"],
-    WEB_SESSION_SPEC: manifest.package_specs["web-session-core"],
+    ...blueprint.tokens(manifest),
   };
 
   for (const [templateFile, templateContent] of templateFiles) {
@@ -180,7 +238,7 @@ async function main() {
     schema_version: 1,
     generator: "niwar-devforge",
     generator_version: GENERATOR_VERSION,
-    blueprint: BLUEPRINT,
+    blueprint: manifest.blueprint,
     product: manifest.product,
     modules: manifest.modules,
     package_specs: manifest.package_specs,
@@ -191,7 +249,9 @@ async function main() {
     { encoding: "utf8", flag: "wx" },
   );
 
-  console.log(`Generated ${manifest.product.slug} with ${templateFiles.length} template files.`);
+  console.log(
+    `Generated ${manifest.product.slug} with ${templateFiles.length} template files using ${manifest.blueprint}.`,
+  );
 }
 
 await main();

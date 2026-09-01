@@ -13,7 +13,7 @@ Provides a reusable, typed mobile authentication boundary for DevForge products 
 ## Dependencies
 
 - Flutter SDK; CI proof pinned to Flutter `3.47.0`
-- `flutter_secure_storage` `11.0.0`, BSD-3-Clause, isolated behind `SecretStore`
+- `flutter_secure_storage` `10.3.1`, BSD-3-Clause, isolated behind `SecretStore`
 - Dart `dart:io` for the default Android/iOS HTTP transport
 - OpenAPI Generator CLI `7.24.0`, Apache-2.0, build-time parity proof only; generated output is ephemeral and not a runtime dependency of this module
 
@@ -123,4 +123,6 @@ CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. 
 
 ## Upgrade notes
 
-Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, the storage provider, OpenAPI Generator version/checksum, generator type, serialization strategy, or generated-runtime adoption require explicit compatibility/security review. `flutter_secure_storage` 11 removes deprecated pre-v10 algorithms; products with legacy secure-storage data must follow the upstream migration path before adopting v11 directly.
+Changes to secure-storage keys, backend session response shape, TLS policy, login replacement policy, public error-code policy, logout semantics, the storage provider, OpenAPI Generator version/checksum, generator type, serialization strategy, or generated-runtime adoption require explicit compatibility/security review.
+
+`flutter_secure_storage` `10.3.1` is intentionally pinned for the current Flutter `3.47.0` / Android SDK 36 proof. The v10 line uses the modern Android RSA-OAEP + AES-GCM storage path and is compatible with the current generated Android host toolchain. Upstream `11.0.0` raises `compileSdk` to 37 and removes deprecated pre-v10 algorithms; adoption of v11 therefore requires both an Android toolchain that supports compile SDK 37 and a migration review for any product carrying legacy secure-storage data.
