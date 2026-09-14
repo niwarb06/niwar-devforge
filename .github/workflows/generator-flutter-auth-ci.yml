@@ -82,7 +82,7 @@ jobs:
         working-directory: packages/flutter-auth-core
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format --output=none --set-exit-if-changed lib test integration_test
           flutter analyze
           flutter test
 
@@ -207,8 +207,34 @@ jobs:
           cp -R .generated/flutter-first/test .generated/ios-host/test
           cp .generated/flutter-first/pubspec.yaml .generated/ios-host/pubspec.yaml
           cp .generated/flutter-first/analysis_options.yaml .generated/ios-host/analysis_options.yaml
+          mkdir -p .generated/ios-host/integration_test
+          cp packages/flutter-auth-core/integration_test/secure_storage_integration_test.dart \
+            .generated/ios-host/integration_test/secure_storage_integration_test.dart
+          python3 - <<'PY'
+          from pathlib import Path
+
+          pubspec = Path('.generated/ios-host/pubspec.yaml')
+          text = pubspec.read_text()
+          needle = 'dev_dependencies:\n  flutter_test:\n    sdk: flutter\n'
+          replacement = needle + '  integration_test:\n    sdk: flutter\n'
+          if needle not in text:
+              raise SystemExit('expected Flutter dev_dependencies block not found')
+          pubspec.write_text(text.replace(needle, replacement, 1))
+          PY
           cd .generated/ios-host
           flutter pub get
-          flutter analyze lib
+          dart format --output=none --set-exit-if-changed integration_test
+          flutter analyze lib integration_test
           flutter build ios --simulator --debug
           test -d build/ios/iphonesimulator/Runner.app
+
+      - name: Run iOS Simulator secure-storage integration proof
+        working-directory: .generated/ios-host
+        run: |
+          DEVICE_UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone")))')"
+          test -n "$DEVICE_UDID"
+          xcrun simctl boot "$DEVICE_UDID" || true
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          flutter test integration_test/secure_storage_integration_test.dart \
+            -d "$DEVICE_UDID" \
+            --reporter expanded
