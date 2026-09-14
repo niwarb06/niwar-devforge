@@ -34,7 +34,7 @@ EXPECTED_HASHED_FILES = (
 # package, installed version, and license expression. Any drift fails closed.
 REVIEWED_TRIVY_UNKNOWN_LICENSES = {
     ("backend-license.json", "cffi", "2.1.1", "MIT-0"),
-    ("backend-license.json", "greenlet", "3.5.5", "MIT AND PSF-2.0"),
+    ("backend-license.json", "greenlet", "3.5.6", "MIT AND PSF-2.0"),
     ("backend-license.json", "typing-extensions", "4.16.0", "PSF-2.0"),
 }
 
