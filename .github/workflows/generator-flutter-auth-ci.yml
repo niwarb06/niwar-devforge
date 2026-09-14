@@ -165,3 +165,50 @@ jobs:
         if: always()
         run: |
           if [ -f .generated/backend.pid ]; then kill "$(cat .generated/backend.pid)" || true; fi
+
+  generated-flutter-auth-ios-simulator:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Tool versions
+        run: |
+          node --version
+          flutter --version
+          xcodebuild -version
+
+      - name: Generate Flutter product
+        run: |
+          rm -rf .generated
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-proof.json \
+            --output .generated/flutter-first
+
+      - name: Build generated product in iOS simulator host
+        run: |
+          flutter create \
+            --platforms=ios \
+            --project-name=generated_mobile_auth_host \
+            --org=com.niwar.devforge \
+            .generated/ios-host
+          rm -rf .generated/ios-host/lib .generated/ios-host/test
+          cp -R .generated/flutter-first/lib .generated/ios-host/lib
+          cp -R .generated/flutter-first/test .generated/ios-host/test
+          cp .generated/flutter-first/pubspec.yaml .generated/ios-host/pubspec.yaml
+          cp .generated/flutter-first/analysis_options.yaml .generated/ios-host/analysis_options.yaml
+          cd .generated/ios-host
+          flutter pub get
+          flutter analyze lib
+          flutter build ios --simulator --debug
+          test -d build/ios/iphonesimulator/Runner.app

@@ -4,6 +4,8 @@ Status: **EVIDENCE BASELINE COMPLETE; PHASE 8 REMAINS OPEN**
 
 Evidence date: 2026-08-22
 
+Supplemental iOS Simulator artifact evidence: 2026-09-14
+
 This document records the Phase 8 pilot measurements required by `docs/01_ROADMAP_0_TO_100.md` for two materially different products generated from Niwar DevForge. It deliberately does **not** claim that either pilot is a Production Candidate.
 
 ## 1. Evidence snapshot
@@ -17,7 +19,9 @@ PR #23: `https://github.com/niwarb06/niwar-devforge/pull/23`
 
 PR #24: `https://github.com/niwarb06/niwar-devforge/pull/24`
 
-These pilots are materially different because the web pilot uses the reviewed browser BFF / secure-cookie boundary, while the mobile pilot uses the reviewed Flutter client / secure-session-vault boundary and produces an Android artifact.
+Supplemental generated-mobile iOS Simulator artifact proof is recorded in PR #36, workflow run `34893551739`, at exact evidence head `c9263969dd9c452c688e65ced312c4b2dfc654e6`. That run generated the existing Flutter pilot on `macos-15`, created an iOS host shell, resolved dependencies, analyzed the generated application code, built an unsigned debug app with `flutter build ios --simulator --debug`, and verified `build/ios/iphonesimulator/Runner.app` exists. This is build evidence only; it is **not** real-device, signing, App Store, or platform secure-storage runtime evidence.
+
+These pilots are materially different because the web pilot uses the reviewed browser BFF / secure-cookie boundary, while the mobile pilot uses the reviewed Flutter client / secure-session-vault boundary and produces mobile build artifacts.
 
 ## 2. Measurement rules
 
@@ -130,7 +134,20 @@ The pilot required DevForge platform work to add the `flutter-mobile-auth` bluep
 
 A later documentation-only exact head, `e69c81e2ce128d330286f0dddce160218c514c59`, repeated all relevant gates successfully in workflow run `32584193945`, completed at `2026-08-22T16:23:51Z`.
 
-The final exact-head proof passed generator tests, reusable Flutter auth-core validation, backend migrations, byte-identical double generation, dependency resolution, formatting, analyzer, widget E2E, Android debug APK host build, backend startup, and generated Flutter real-backend auth E2E.
+The final original pilot proof passed generator tests, reusable Flutter auth-core validation, backend migrations, byte-identical double generation, dependency resolution, formatting, analyzer, widget E2E, Android debug APK host build, backend startup, and generated Flutter real-backend auth E2E.
+
+### Supplemental iOS Simulator artifact proof
+
+PR #36 adds a separate macOS CI job without changing the Flutter module or generated product runtime behavior. At exact evidence head `c9263969dd9c452c688e65ced312c4b2dfc654e6`, `Generator Flutter Auth CI` run `34893551739` completed successfully on 2026-09-14. Its `generated-flutter-auth-ios-simulator` job:
+
+- used the pinned Flutter `3.47.0` toolchain on `macos-15`;
+- generated the same `flutter-mobile-auth` pilot from `generator/manifests/flutter-auth-proof.json`;
+- created a fresh iOS host shell;
+- resolved dependencies and passed `flutter analyze lib`;
+- built an unsigned iOS Simulator debug application with `flutter build ios --simulator --debug`;
+- verified the resulting `Runner.app` directory exists.
+
+This closes the narrow **iOS Simulator artifact build** gap. It does not prove real-device execution, Keychain/secure-storage behavior on an iOS device or simulator, code signing, release/archive packaging, or App Store readiness.
 
 ### Defects / regressions
 
@@ -145,7 +162,7 @@ Unresolved exact-head CI regressions: **0**.
 
 **OPEN / NOT REACHED.**
 
-The current proof builds an Android debug APK in CI but does not yet satisfy the Production Candidate definition. Important open gates include real Android/iOS device or emulator secure-storage integration, iOS artifact/device proof, staging deployment, release security/dependency/secret gates, monitoring/health validation, and rollback/release evidence.
+The current CI proof builds an Android debug APK and an unsigned iOS Simulator debug app, but it does not yet satisfy the Production Candidate definition. Important open gates include real Android/iOS device or emulator secure-storage integration, real-device/release iOS proof where required, staging deployment, release security/dependency/secret gates, monitoring/health validation, and rollback/release evidence.
 
 ## 5. Combined Phase 8 metrics
 
@@ -164,7 +181,7 @@ The two pilots prove that DevForge can deterministically assemble and validate t
 - a browser product using a BFF / HttpOnly-cookie security model; and
 - a Flutter mobile product using a secure local session vault and mobile API-client security model.
 
-Both generated products run against the same reusable FastAPI backend with PostgreSQL and Redis. Both exact-head proof lines are green, and the mobile pilot additionally proves Android APK host compilation.
+Both generated products run against the same reusable FastAPI backend with PostgreSQL and Redis. Both original exact-head proof lines are green. The mobile pilot additionally proves Android APK host compilation, and the supplemental PR #36 evidence proves that the same generated Flutter product can also compile into an unsigned iOS Simulator debug app on macOS.
 
 The evidence also shows that failures found by the pilot loop were repaired in reusable DevForge boundaries rather than patched into generated product output.
 
@@ -181,6 +198,7 @@ Therefore:
 - **First-working-build measurement:** PASS
 - **Defect/regression measurement:** PASS
 - **Custom-code measurement:** PASS
+- **iOS Simulator artifact build:** PASS
 - **Production-candidate duration:** OPEN
 - **Phase 8 / 100% completion claim:** **NOT YET APPROVED**
 
@@ -197,5 +215,7 @@ Minimum next evidence should include:
 - rollback procedure and applicable backup/restore evidence;
 - release notes and a recorded Production Candidate timestamp;
 - no production deployment without explicit human approval.
+
+Until a real staging host is available, the remaining mobile-specific proof gap is real Android/iOS device or emulator integration against platform secure storage; the iOS Simulator artifact build itself is now evidenced separately above.
 
 Once the first pilot reaches Production Candidate, record its duration here. Phase 8 should only be considered fully complete after the remaining roadmap/Definition-of-Done interpretation is reviewed against that evidence.
