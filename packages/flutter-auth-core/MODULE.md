@@ -102,6 +102,7 @@ CI must run:
 - `dart format` verification
 - strict `flutter analyze` for handwritten module code
 - `flutter test`
+- iOS Simulator integration proof using the real `flutter_secure_storage` platform implementation for session write/read/clear
 - Flutter dependency snapshot
 - deterministic backend OpenAPI export for parity jobs
 - checksum/version verification of the pinned OpenAPI Generator JAR
@@ -110,11 +111,11 @@ CI must run:
 - generated Dart analysis with errors fatal and warnings reported
 - OpenAPI/generated-source parity verification
 
-CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, and sanitized exception strings.
+CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, sanitized exception strings, and iOS Simulator platform secure-storage write/read/clear through `FlutterSecureStorageSecretStore`.
 
 ## Current promotion blockers
 
-- Android and iOS device/emulator integration tests against real platform secure storage
+- Android emulator/device secure-storage integration and physical iOS device secure-storage integration remain unproven; the iOS Simulator platform proof is covered by CI
 - reviewed integration of generated API contracts/signatures behind the existing secure mobile transport boundary
 - explicit production server/base-URL generation strategy before any generated transport is adopted
 - broader network/cancellation/background-resume failure paths
