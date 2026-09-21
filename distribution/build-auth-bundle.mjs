@@ -123,7 +123,13 @@ await cp(flutterSource, flutterOut, {
   filter: (source) =>
     !source
       .split(/[\\/]/)
-      .some((part) => part === ".dart_tool" || part === "build" || part === ".git"),
+      .some(
+        (part) =>
+          part === ".dart_tool" ||
+          part === "build" ||
+          part === ".git" ||
+          part === "integration_test",
+      ),
 });
 await writeFile(
   join(flutterRoot, "bundle.json"),
