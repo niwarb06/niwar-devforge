@@ -240,12 +240,30 @@ jobs:
           adb="$ANDROID_SDK_ROOT/platform-tools/adb"
           test -x "$sdkmanager"
           test -x "$avdmanager"
-          test -x "$emulator"
           test -x "$adb"
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
-          "$sdkmanager" --install \
-            "system-images;android-35;google_apis;x86_64"
+
+          install_sdk_package() {
+            package="$1"
+            for attempt in 1 2 3; do
+              if "$sdkmanager" --install "$package"; then
+                return 0
+              fi
+              echo "SDK package install failed for $package (attempt $attempt/3)." >&2
+              if [ "$package" = "emulator" ]; then
+                rm -rf "$ANDROID_SDK_ROOT/emulator"
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          if [ ! -x "$emulator" ]; then
+            install_sdk_package "emulator"
+          fi
+          test -x "$emulator"
+          install_sdk_package "system-images;android-35;google_apis;x86_64"
 
           export ANDROID_AVD_HOME="$RUNNER_TEMP/devforge-android-avd"
           avd_dir="$ANDROID_AVD_HOME/devforge_api_35.avd"
