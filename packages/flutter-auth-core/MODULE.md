@@ -102,6 +102,7 @@ CI must run:
 - `dart format` verification
 - strict `flutter analyze` for handwritten module code
 - `flutter test`
+- Android Emulator integration proof using the real `flutter_secure_storage` platform implementation for session write/read/clear
 - iOS Simulator integration proof using the real `flutter_secure_storage` platform implementation for session write/read/clear
 - Flutter dependency snapshot
 - deterministic backend OpenAPI export for parity jobs
@@ -115,7 +116,7 @@ CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. 
 
 ## Current promotion blockers
 
-- Android emulator/device secure-storage integration and physical iOS device secure-storage integration remain unproven; the iOS Simulator platform proof is covered by CI
+- physical Android device and physical iOS device secure-storage integration remain unproven; Android Emulator and iOS Simulator platform proofs are covered by CI
 - reviewed integration of generated API contracts/signatures behind the existing secure mobile transport boundary
 - explicit production server/base-URL generation strategy before any generated transport is adopted
 - broader network/cancellation/background-resume failure paths
