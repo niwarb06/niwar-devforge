@@ -240,13 +240,12 @@ jobs:
           adb="$ANDROID_SDK_ROOT/platform-tools/adb"
           test -x "$sdkmanager"
           test -x "$avdmanager"
+          test -x "$emulator"
+          test -x "$adb"
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
           "$sdkmanager" --install \
-            "emulator" \
-            "platform-tools" \
             "system-images;android-35;google_apis;x86_64"
-          test -x "$adb"
 
           export ANDROID_AVD_HOME="$RUNNER_TEMP/devforge-android-avd"
           avd_dir="$ANDROID_AVD_HOME/devforge_api_35.avd"
