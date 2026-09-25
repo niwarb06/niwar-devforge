@@ -21,6 +21,20 @@ final class DevForgeMobileAuthClient {
 
   static final RegExp _publicErrorCodePattern = RegExp(r'[a-z][a-z0-9_]{0,63}');
 
+  // These relative paths and success statuses are verified against the
+  // authoritative backend OpenAPI schema and generated Dart contract in CI.
+  // Requests still flow through AuthHttpTransport so generated transport code
+  // never receives session-storage or credential-boundary authority.
+  static const String _registerPath = 'auth/register';
+  static const String _sessionPath = 'auth/session';
+  static const String _currentProfilePath = 'users/me';
+  static const String _updateProfilePath = 'users/me/profile';
+  static const int _registerSuccessStatus = 201;
+  static const int _sessionSuccessStatus = 200;
+  static const int _profileSuccessStatus = 200;
+  static const int _logoutSuccessStatus = 204;
+  static const int _unauthorizedStatus = 401;
+
   final Uri _baseUrl;
   final SecureSessionVault _sessionVault;
   final AuthHttpTransport _transport;
@@ -32,7 +46,7 @@ final class DevForgeMobileAuthClient {
     String? displayName,
   }) async {
     final response = await _sendJson(
-      'auth/register',
+      _registerPath,
       method: 'POST',
       body: <String, Object?>{
         'email': email,
@@ -40,7 +54,7 @@ final class DevForgeMobileAuthClient {
         'display_name': displayName,
       },
     );
-    if (response.statusCode != 201) {
+    if (response.statusCode != _registerSuccessStatus) {
       throw _apiException(response);
     }
     return _profileFromResponse(response);
@@ -56,11 +70,11 @@ final class DevForgeMobileAuthClient {
     }
 
     final response = await _sendJson(
-      'auth/session',
+      _sessionPath,
       method: 'POST',
       body: <String, Object?>{'identifier': identifier, 'password': password},
     );
-    if (response.statusCode != 200) {
+    if (response.statusCode != _sessionSuccessStatus) {
       throw _apiException(response);
     }
 
@@ -99,15 +113,15 @@ final class DevForgeMobileAuthClient {
     if (session == null) return null;
 
     final response = await _sendJson(
-      'users/me',
+      _currentProfilePath,
       method: 'GET',
       authorizationToken: session.token,
     );
-    if (response.statusCode == 401) {
+    if (response.statusCode == _unauthorizedStatus) {
       await _clearSession();
       return null;
     }
-    if (response.statusCode != 200) {
+    if (response.statusCode != _profileSuccessStatus) {
       throw _apiException(response);
     }
     return _profileFromResponse(response);
@@ -116,20 +130,26 @@ final class DevForgeMobileAuthClient {
   Future<UserProfile> updateProfile({String? displayName}) async {
     final session = await _readSession();
     if (session == null) {
-      throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
+      throw const AuthApiException(
+        statusCode: _unauthorizedStatus,
+        code: 'not_authenticated',
+      );
     }
 
     final response = await _sendJson(
-      'users/me/profile',
+      _updateProfilePath,
       method: 'PATCH',
       authorizationToken: session.token,
       body: <String, Object?>{'display_name': displayName},
     );
-    if (response.statusCode == 401) {
+    if (response.statusCode == _unauthorizedStatus) {
       await _clearSession();
-      throw const AuthApiException(statusCode: 401, code: 'not_authenticated');
+      throw const AuthApiException(
+        statusCode: _unauthorizedStatus,
+        code: 'not_authenticated',
+      );
     }
-    if (response.statusCode != 200) {
+    if (response.statusCode != _profileSuccessStatus) {
       throw _apiException(response);
     }
     return _profileFromResponse(response);
@@ -146,11 +166,12 @@ final class DevForgeMobileAuthClient {
     }
 
     final response = await _sendJson(
-      'auth/session',
+      _sessionPath,
       method: 'DELETE',
       authorizationToken: session.token,
     );
-    if (response.statusCode == 204 || response.statusCode == 401) {
+    if (response.statusCode == _logoutSuccessStatus ||
+        response.statusCode == _unauthorizedStatus) {
       await _clearSession();
       return const LogoutResult(
         serverSessionEnded: true,
@@ -185,7 +206,7 @@ final class DevForgeMobileAuthClient {
   Future<void> _revokeTokenBestEffort(String token) async {
     try {
       await _sendJson(
-        'auth/session',
+        _sessionPath,
         method: 'DELETE',
         authorizationToken: token,
       );

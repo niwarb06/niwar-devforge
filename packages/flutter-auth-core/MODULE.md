@@ -22,6 +22,7 @@ See `THIRD_PARTY.md` for dependency provenance and upgrade findings.
 ## Configuration
 
 - backend API base URL, normally ending in `/api/v1`
+- generated products receive the backend API prefix explicitly through `DEVFORGE_BACKEND_API_BASE_URL`; there is no generated localhost production default
 - request timeout, default 15 seconds
 - optional explicit insecure localhost development exception
 - injectable `AuthHttpTransport`
@@ -86,9 +87,9 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 2. downloads OpenAPI Generator CLI `7.24.0`, verifies its pinned SHA-256 and reported version, then runs the stable `dart-dio` generator with `openapi-generator-config.json`;
 3. resolves generated dependencies and builds generated serializers;
 4. runs Dart analysis with analyzer errors fatal while keeping generator-origin warnings visible in CI logs;
-5. runs `scripts/verify_openapi_parity.py` against both the exported schema and generated Dart output.
+5. runs `scripts/verify_openapi_parity.py` against the exported schema, generated Dart output, the handwritten secure runtime client, and the generated Flutter template.
 
-The verifier covers the five mobile auth/profile routes, expected success status codes, `DevForgeSession` bearer protection on authenticated operations, request/response schema references, credential length constraints, session metadata invariants, profile shape, and generated-source route/model markers.
+The verifier covers the five mobile auth/profile routes, expected success status codes, `DevForgeSession` bearer protection on authenticated operations, request/response schema references, credential length constraints, session metadata invariants, profile shape, generated-source route/model markers, the runtime client's route/status contract markers, generated Dart base-path override support, and the generated product's explicit HTTPS-first backend base-URL configuration. Generated HTTP code remains contract evidence only; requests continue through the reviewed `AuthHttpTransport` boundary.
 
 Generated output is placed in a temporary CI directory. It is not committed, distributed, or granted authority over secure session storage. The proof uses the stable `built_value` serialization path. Optional/patch-only generator modes are not enabled because that combination produced invalid BuiltValue output for the nullable profile PATCH field in this generator version; the backend currently treats omitted and explicit-null `display_name` equivalently.
 
@@ -111,14 +112,14 @@ CI must run:
 - generated Dart serializer build
 - generated Dart analysis with errors fatal and warnings reported
 - OpenAPI/generated-source parity verification
+- secure runtime route/status contract verification against the OpenAPI-generated proof
+- generated product backend base-URL configuration verification
 
-CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, sanitized exception strings, and iOS Simulator platform secure-storage write/read/clear through `FlutterSecureStorageSecretStore`.
+CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, sanitized exception strings, and Android Emulator/iOS Simulator platform secure-storage write/read/clear through `FlutterSecureStorageSecretStore`.
 
 ## Current promotion blockers
 
 - physical Android device and physical iOS device secure-storage integration remain unproven; Android Emulator and iOS Simulator platform proofs are covered by CI
-- reviewed integration of generated API contracts/signatures behind the existing secure mobile transport boundary
-- explicit production server/base-URL generation strategy before any generated transport is adopted
 - broader network/cancellation/background-resume failure paths
 - dependency advisory/release automation for the Flutter package ecosystem
 - at least one production-like pilot

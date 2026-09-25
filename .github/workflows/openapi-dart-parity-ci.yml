@@ -5,11 +5,13 @@ on:
     paths:
       - "packages/backend-core/**"
       - "packages/flutter-auth-core/**"
+      - "generator/templates/flutter-mobile-auth/files.json"
       - ".github/workflows/openapi-dart-parity-ci.yml"
   pull_request:
     paths:
       - "packages/backend-core/**"
       - "packages/flutter-auth-core/**"
+      - "generator/templates/flutter-mobile-auth/files.json"
       - ".github/workflows/openapi-dart-parity-ci.yml"
 
 permissions:
@@ -95,4 +97,6 @@ jobs:
         run: |
           python3 packages/flutter-auth-core/scripts/verify_openapi_parity.py \
             --schema /tmp/devforge-openapi.json \
-            --generated /tmp/devforge-dart-client
+            --generated /tmp/devforge-dart-client \
+            --runtime-client packages/flutter-auth-core/lib/src/client.dart \
+            --generated-template generator/templates/flutter-mobile-auth/files.json

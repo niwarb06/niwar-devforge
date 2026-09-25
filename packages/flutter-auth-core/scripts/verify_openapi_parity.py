@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -278,17 +279,139 @@ def _verify_generated(generated: Path) -> None:
     if missing:
         raise ParityError(f"generated Dart client is missing markers: {missing}")
 
+    if "basePathOverride" not in corpus:
+        raise ParityError(
+            "generated Dart client no longer exposes explicit base-path override support"
+        )
+
+
+def _read_text(path: Path, label: str) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ParityError(f"cannot read {label}: {path}") from exc
+
+
+def _dart_string_const(source: str, name: str) -> str:
+    match = re.search(
+        rf"static const String {re.escape(name)} = '([^']+)';",
+        source,
+    )
+    if match is None:
+        raise ParityError(f"runtime client is missing string contract marker: {name}")
+    return match.group(1)
+
+
+def _dart_int_const(source: str, name: str) -> int:
+    match = re.search(
+        rf"static const int {re.escape(name)} = ([0-9]+);",
+        source,
+    )
+    if match is None:
+        raise ParityError(f"runtime client is missing status contract marker: {name}")
+    return int(match.group(1))
+
+
+def _verify_runtime_client(runtime_client: Path) -> None:
+    source = _read_text(runtime_client, "secure runtime client")
+
+    expected_strings = {
+        "_registerPath": "auth/register",
+        "_sessionPath": "auth/session",
+        "_currentProfilePath": "users/me",
+        "_updateProfilePath": "users/me/profile",
+    }
+    expected_ints = {
+        "_registerSuccessStatus": 201,
+        "_sessionSuccessStatus": 200,
+        "_profileSuccessStatus": 200,
+        "_logoutSuccessStatus": 204,
+        "_unauthorizedStatus": 401,
+    }
+    for name, expected in expected_strings.items():
+        actual = _dart_string_const(source, name)
+        if actual != expected:
+            raise ParityError(
+                f"secure runtime contract marker {name} changed from {expected!r}"
+            )
+    for name, expected in expected_ints.items():
+        actual = _dart_int_const(source, name)
+        if actual != expected:
+            raise ParityError(
+                f"secure runtime status marker {name} changed from {expected}"
+            )
+
+    call_markers = (
+        "_sendJson(\n      _registerPath,\n      method: 'POST',",
+        "_sendJson(\n      _sessionPath,\n      method: 'POST',",
+        "_sendJson(\n      _currentProfilePath,\n      method: 'GET',",
+        "_sendJson(\n      _updateProfilePath,\n      method: 'PATCH',",
+        "_sendJson(\n      _sessionPath,\n      method: 'DELETE',",
+    )
+    missing = [marker for marker in call_markers if marker not in source]
+    if missing:
+        raise ParityError(
+            "secure runtime client no longer routes all auth calls through "
+            "OpenAPI-verified contract markers"
+        )
+
+
+def _verify_generated_template(template_file: Path) -> None:
+    try:
+        template = json.loads(template_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ParityError(
+            f"cannot read generated Flutter template: {template_file}"
+        ) from exc
+    if not isinstance(template, dict):
+        raise ParityError("generated Flutter template root must be an object")
+
+    main_source = template.get("lib/main.dart")
+    readme = template.get("README.md")
+    if not isinstance(main_source, str) or not isinstance(readme, str):
+        raise ParityError("generated Flutter template is missing main.dart or README")
+
+    required_main_markers = (
+        "String.fromEnvironment(\n  'DEVFORGE_BACKEND_API_BASE_URL',",
+        "bool.fromEnvironment(\n  'DEVFORGE_ALLOW_INSECURE_LOCALHOST',\n  defaultValue: false,",
+        "DevForgeMobileAuthClient(",
+        "backendApiBaseUrl: Uri.parse(_configuredBackendApiBaseUrl),",
+    )
+    missing = [marker for marker in required_main_markers if marker not in main_source]
+    if missing:
+        raise ParityError(
+            "generated Flutter product lost explicit backend base-URL configuration"
+        )
+
+    if "http://localhost" in main_source or "http://127.0.0.1" in main_source:
+        raise ParityError(
+            "generated Flutter main.dart must not embed an insecure localhost default"
+        )
+
+    if "https://api.example.test/api/v1" not in readme:
+        raise ParityError(
+            "generated Flutter README must document an explicit HTTPS API prefix"
+        )
+    if "--dart-define=DEVFORGE_ALLOW_INSECURE_LOCALHOST=true" not in readme:
+        raise ParityError(
+            "generated Flutter README must keep localhost HTTP explicitly opt-in"
+        )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--generated", type=Path, required=True)
+    parser.add_argument("--runtime-client", type=Path, required=True)
+    parser.add_argument("--generated-template", type=Path, required=True)
     args = parser.parse_args()
 
     try:
         schema = _load_json(args.schema)
         _verify_schema(schema)
         _verify_generated(args.generated)
+        _verify_runtime_client(args.runtime_client)
+        _verify_generated_template(args.generated_template)
     except ParityError as exc:
         raise SystemExit(f"OpenAPI Dart parity check failed: {exc}") from exc
 
