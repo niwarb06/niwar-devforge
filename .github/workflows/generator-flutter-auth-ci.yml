@@ -166,6 +166,182 @@ jobs:
         run: |
           if [ -f .generated/backend.pid ]; then kill "$(cat .generated/backend.pid)" || true; fi
 
+
+  generated-flutter-auth-android-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Tool versions
+        run: |
+          node --version
+          flutter --version
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version
+
+      - name: Generate Flutter product
+        run: |
+          rm -rf .generated
+          node generator/generate.mjs \
+            --manifest generator/manifests/flutter-auth-proof.json \
+            --output .generated/flutter-first
+
+      - name: Build generated product in Android emulator host
+        run: |
+          flutter create \
+            --platforms=android \
+            --project-name=generated_mobile_auth_host \
+            --org=com.niwar.devforge \
+            .generated/android-emulator-host
+          rm -rf .generated/android-emulator-host/lib .generated/android-emulator-host/test
+          cp -R .generated/flutter-first/lib .generated/android-emulator-host/lib
+          cp -R .generated/flutter-first/test .generated/android-emulator-host/test
+          cp .generated/flutter-first/pubspec.yaml .generated/android-emulator-host/pubspec.yaml
+          cp .generated/flutter-first/analysis_options.yaml .generated/android-emulator-host/analysis_options.yaml
+          mkdir -p .generated/android-emulator-host/integration_test
+          cp packages/flutter-auth-core/integration_test/secure_storage_integration_test.dart \
+            .generated/android-emulator-host/integration_test/secure_storage_integration_test.dart
+          python3 - <<'PY'
+          from pathlib import Path
+
+          pubspec = Path('.generated/android-emulator-host/pubspec.yaml')
+          text = pubspec.read_text()
+          needle = 'dev_dependencies:\n  flutter_test:\n    sdk: flutter\n'
+          replacement = needle + '  integration_test:\n    sdk: flutter\n'
+          if needle not in text:
+              raise SystemExit('expected Flutter dev_dependencies block not found')
+          pubspec.write_text(text.replace(needle, replacement, 1))
+          PY
+          cd .generated/android-emulator-host
+          flutter pub get
+          dart format --output=none --set-exit-if-changed integration_test
+          flutter analyze lib integration_test
+          flutter build apk --debug
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Boot Android emulator
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          avdmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+          emulator="$ANDROID_SDK_ROOT/emulator/emulator"
+          adb="$ANDROID_SDK_ROOT/platform-tools/adb"
+          test -x "$sdkmanager"
+          test -x "$avdmanager"
+          test -x "$adb"
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+
+          install_sdk_package() {
+            package="$1"
+            for attempt in 1 2 3; do
+              if "$sdkmanager" --install "$package"; then
+                return 0
+              fi
+              echo "SDK package install failed for $package (attempt $attempt/3)." >&2
+              if [ "$package" = "emulator" ]; then
+                rm -rf "$ANDROID_SDK_ROOT/emulator"
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          if [ ! -x "$emulator" ]; then
+            install_sdk_package "emulator"
+          fi
+          test -x "$emulator"
+          install_sdk_package "system-images;android-35;google_apis;x86_64"
+
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/devforge-android-avd"
+          avd_dir="$ANDROID_AVD_HOME/devforge_api_35.avd"
+          rm -rf "$ANDROID_AVD_HOME"
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | "$avdmanager" create avd \
+            --force \
+            --name devforge_api_35 \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --path "$avd_dir"
+          test -f "$avd_dir/config.ini"
+          cat > "$ANDROID_AVD_HOME/devforge_api_35.ini" <<EOF
+          avd.ini.encoding=UTF-8
+          path=$avd_dir
+          target=android-35
+          EOF
+          "$emulator" -list-avds | grep -Fx devforge_api_35
+
+          nohup "$emulator" \
+            -avd devforge_api_35 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -no-snapshot \
+            -wipe-data \
+            > .generated/android-emulator.log 2>&1 &
+          emulator_pid=$!
+          echo "$emulator_pid" > .generated/android-emulator.pid
+
+          for attempt in $(seq 1 180); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              echo "Android emulator process exited before boot completed."
+              cat .generated/android-emulator.log
+              exit 1
+            fi
+
+            device_id="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ {print $1; exit}')"
+            if [ -n "$device_id" ]; then
+              boot="$("$adb" -s "$device_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [ "$boot" = "1" ]; then
+                "$adb" -s "$device_id" shell input keyevent 82 || true
+                "$adb" devices
+                exit 0
+              fi
+            fi
+
+            sleep 2
+          done
+
+          echo "Android emulator did not complete boot within the bounded polling window."
+          cat .generated/android-emulator.log
+          exit 1
+
+      - name: Run Android Emulator secure-storage integration proof
+        working-directory: .generated/android-emulator-host
+        timeout-minutes: 10
+        run: |
+          adb="$ANDROID_SDK_ROOT/platform-tools/adb"
+          test -x "$adb"
+          DEVICE_ID="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ {print $1; exit}')"
+          test -n "$DEVICE_ID"
+          flutter devices
+          flutter test integration_test/secure_storage_integration_test.dart \
+            -d "$DEVICE_ID" \
+            --reporter expanded
+
+      - name: Stop Android emulator
+        if: always()
+        run: |
+          adb="$ANDROID_SDK_ROOT/platform-tools/adb"
+          if [ -x "$adb" ]; then
+            DEVICE_ID="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ {print $1; exit}')"
+            if [ -n "$DEVICE_ID" ]; then
+              "$adb" -s "$DEVICE_ID" emu kill || true
+            fi
+          fi
+
   generated-flutter-auth-ios-simulator:
     runs-on: macos-15
 
@@ -230,7 +406,7 @@ jobs:
 
       - name: Run iOS Simulator secure-storage integration proof
         working-directory: .generated/ios-host
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           DEVICE_UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone")))')"
           test -n "$DEVICE_UDID"

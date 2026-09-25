@@ -13,7 +13,7 @@ void main() {
     addTearDown(vault.clear);
 
     final now = DateTime.utc(2026, 1, 1);
-    const token = 'devforge-ios-secure-storage-session-token-1234567890';
+    const token = 'devforge-platform-secure-storage-session-token-1234567890';
 
     await vault.save(
       token: token,
