@@ -45,44 +45,19 @@ final class IoAuthHttpTransport implements AuthHttpTransport {
     if (maxResponseBodyBytes < 1024 || maxResponseBodyBytes > 1024 * 1024) {
       throw const AuthTransportException('invalid_transport_configuration');
     }
+    if (timeout <= Duration.zero) {
+      throw const AuthTransportException('invalid_transport_configuration');
+    }
 
     final client = HttpClient()..connectionTimeout = timeout;
     try {
-      final request = await client.openUrl(method, uri).timeout(timeout);
-      request
-        ..followRedirects = false
-        ..maxRedirects = 0;
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      headers?.forEach(request.headers.set);
-      if (body != null) {
-        request.add(utf8.encode(body));
-      }
-
-      final response = await request.close().timeout(timeout);
-      final bytes = BytesBuilder(copy: false);
-      var totalBytes = 0;
-      await for (final chunk in response.timeout(timeout)) {
-        totalBytes += chunk.length;
-        if (totalBytes > maxResponseBodyBytes) {
-          throw const AuthTransportException('response_too_large');
-        }
-        bytes.add(chunk);
-      }
-
-      final responseHeaders = <String, String>{};
-      response.headers.forEach((name, values) {
-        responseHeaders[name.toLowerCase()] = values.join(',');
-      });
-
-      final responseBody = utf8.decode(
-        bytes.takeBytes(),
-        allowMalformed: false,
-      );
-      return AuthHttpResponse(
-        statusCode: response.statusCode,
-        headers: Map.unmodifiable(responseHeaders),
-        body: responseBody,
-      );
+      return await _sendWithinDeadline(
+        client,
+        uri,
+        method: method,
+        headers: headers,
+        body: body,
+      ).timeout(timeout);
     } on AuthTransportException {
       rethrow;
     } on TimeoutException {
@@ -94,5 +69,46 @@ final class IoAuthHttpTransport implements AuthHttpTransport {
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<AuthHttpResponse> _sendWithinDeadline(
+    HttpClient client,
+    Uri uri, {
+    required String method,
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    final request = await client.openUrl(method, uri);
+    request
+      ..followRedirects = false
+      ..maxRedirects = 0;
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    headers?.forEach(request.headers.set);
+    if (body != null) {
+      request.add(utf8.encode(body));
+    }
+
+    final response = await request.close();
+    final bytes = BytesBuilder(copy: false);
+    var totalBytes = 0;
+    await for (final chunk in response) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxResponseBodyBytes) {
+        throw const AuthTransportException('response_too_large');
+      }
+      bytes.add(chunk);
+    }
+
+    final responseHeaders = <String, String>{};
+    response.headers.forEach((name, values) {
+      responseHeaders[name.toLowerCase()] = values.join(',');
+    });
+
+    final responseBody = utf8.decode(bytes.takeBytes(), allowMalformed: false);
+    return AuthHttpResponse(
+      statusCode: response.statusCode,
+      headers: Map.unmodifiable(responseHeaders),
+      body: responseBody,
+    );
   }
 }
