@@ -61,6 +61,7 @@ The configured base URL supplies the backend API prefix. FastAPI OpenAPI remains
 - invalid base-URL validation errors never echo the supplied URI, avoiding accidental credential/query-secret reflection
 - the default transport refuses redirects
 - response bodies are size bounded
+- the configured request timeout is enforced as one end-to-end deadline across connection, request, response streaming, and response decoding
 - login response session tokens are persisted to secure storage before login completes and are not returned to application UI state
 - a valid existing local session blocks another login so the previous server session is not silently orphaned
 - if secure persistence of a newly created backend session fails, the client immediately attempts server-side revocation of the unpersisted token and returns a sanitized storage error
@@ -115,12 +116,12 @@ CI must run:
 - secure runtime route/status contract verification against the OpenAPI-generated proof
 - generated product backend base-URL configuration verification
 
-CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, sanitized exception strings, and Android Emulator/iOS Simulator platform secure-storage write/read/clear through `FlutterSecureStorageSecretStore`.
+CI setup actions used by the Flutter module are pinned to reviewed commit SHAs. Tests cover secure session persistence/expiry, token non-exposure in login results, refusal to replace an active session, best-effort revocation after secure-storage write failure, cleanup of valid-looking tokens from malformed successful responses, bearer translation, stale-401 cleanup, registration without implicit login, malformed login response rejection, secure logout retry semantics, TLS/local-development policy, secret-safe URL validation errors, bounded public error metadata, sanitized exception strings, one end-to-end HTTP request deadline, network interruption preserving an existing session for resume/retry, cancellation-style logout failure preserving the token for retry, login timeout without local-session creation, and Android Emulator/iOS Simulator platform secure-storage write/read/clear through `FlutterSecureStorageSecretStore`.
 
 ## Current promotion blockers
 
 - physical Android device and physical iOS device secure-storage integration remain unproven; Android Emulator and iOS Simulator platform proofs are covered by CI
-- broader network/cancellation/background-resume failure paths
+- explicit caller-driven request cancellation and full platform background/resume orchestration remain unproven; one end-to-end request deadline and interruption/resume retry semantics are covered by tests
 - dependency advisory/release automation for the Flutter package ecosystem
 - at least one production-like pilot
 
