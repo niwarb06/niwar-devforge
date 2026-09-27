@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import MappingProxyType
-from typing import Literal, Mapping, Protocol
+from typing import Literal, Protocol
 
 AuditOutcome = Literal["success", "failure"]
 
@@ -31,7 +32,10 @@ class AuditEvent:
             raise ValueError("audit occurred_at must be timezone-aware")
 
         metadata = dict(self.metadata)
-        if not all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()):
+        if not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in metadata.items()
+        ):
             raise ValueError("audit metadata keys and values must be strings")
         object.__setattr__(self, "metadata", MappingProxyType(metadata))
 
