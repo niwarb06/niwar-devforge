@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Provides the reusable backend foundation for configuration, database access, health checks, request context, structured logging, identity persistence, password hashing, opaque sessions, role-based authorization, tenant access boundaries, user profiles, typed API contracts, authenticated API transport primitives, credential abuse protection, and trusted-proxy-aware client address resolution.
+Provides the reusable backend foundation for configuration, database access, health checks, request context, structured logging, provider-neutral audit-event contracts, identity persistence, password hashing, opaque sessions, role-based authorization, tenant access boundaries, user profiles, typed API contracts, authenticated API transport primitives, credential abuse protection, and trusted-proxy-aware client address resolution.
 
 ## Dependencies
 
@@ -36,6 +36,8 @@ All runtime settings use the `DEVFORGE_` environment prefix. Production and shar
 - `DatabaseSessionIssuer`
 - `RedisFixedWindowRateLimiter`
 - `resolve_client_address()` trusted-proxy-aware address resolver
+- `AuditEvent` provider-neutral immutable audit-event contract
+- `AuditSink` provider-neutral persistence/export boundary
 - `RolePermissionPolicy` and `default_authorization_policy()`
 - guarded `RoleAssignmentService`
 - tenant-scoped `TenantAuthorizationService`
@@ -62,6 +64,8 @@ All runtime settings use the `DEVFORGE_` environment prefix. Production and shar
 - role/tenant migration `0003_roles_tenants`
 
 Session tokens are opaque. Only token digests are persisted.
+
+The audit-event slice adds no table, migration, persistence backend, or API endpoint. Products must supply an `AuditSink` implementation before audit events are persisted or exported.
 
 ## Permissions
 
@@ -93,6 +97,8 @@ Session tokens are opaque. Only token digests are persisted.
 - Catch-all trusted proxy networks are rejected so forwarding metadata cannot be made globally authoritative by configuration accident.
 - Incoming `X-Request-ID` values are accepted only when they match a bounded safe-character policy; malformed or oversized values are replaced with a server-generated UUID before logging or echoing.
 - DevForge JSON logging is attached to the `devforge` logger without clearing host/root handlers, and repeated configuration does not add duplicate DevForge handlers.
+- Audit events require a timezone-aware timestamp and non-empty action; metadata is copied into a read-only mapping before the event is exposed to sinks.
+- Audit metadata must not contain passwords, raw session tokens, secrets, or other credentials. Persistent/tamper-evident storage policy belongs to the product-provided sink and is not implemented by this foundation slice.
 - Duplicate registration uses a generic public error rather than exposing the persisted email-existence condition.
 - Credential responses are marked `Cache-Control: no-store`.
 - The `DevForgeSession` bearer scheme is for mobile/API/server-to-server transport. Browser JavaScript must not receive or persist opaque session credentials; web products use the server-mediated BFF + Secure/HttpOnly cookie design from `docs/16_AUTH_CORE_DECISION.md`.
@@ -108,8 +114,8 @@ FastAPI OpenAPI is the transport-contract source of truth. See `OPENAPI_CLIENTS.
 
 ## Tests and Quality Gates
 
-CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, invalid opaque session rejection, persisted-role session resolution, immediate authorization loss after persisted-role removal, disabled-user session rejection, explicit zero-duration session expiry, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. Client-address tests cover untrusted spoof rejection, trusted multi-hop resolution, malformed-chain fallback, CIDR normalization, and catch-all trust rejection. Observability tests cover safe request-ID preservation, malformed/oversized request-ID replacement, and idempotent logging configuration that preserves host/root handlers. The module remains EXPERIMENTAL until topology-specific trusted-proxy deployment evidence, broader production-like integration/failure-path coverage, browser-history integration, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
+CI runs Ruff, strict mypy, Alembic upgrade, deterministic OpenAPI export, TypeScript contract generation proof, pytest, and coverage against PostgreSQL and Redis service containers. Authorization tests cover privileged role assignment, tenant membership boundaries, tenant/global role isolation, and denial of cross-tenant, inactive-tenant, or over-privileged access. API tests cover unauthenticated denial, invalid opaque session rejection, persisted-role session resolution, immediate authorization loss after persisted-role removal, disabled-user session rejection, explicit zero-duration session expiry, self-profile read/update, logout revocation, credential registration/login, generic duplicate/login failures, rate-limit denial, fail-closed limiter outages, client/identifier key privacy, and OpenAPI contracts. Client-address tests cover untrusted spoof rejection, trusted multi-hop resolution, malformed-chain fallback, CIDR normalization, and catch-all trust rejection. Observability tests cover safe request-ID preservation, malformed/oversized request-ID replacement, and idempotent logging configuration that preserves host/root handlers. Audit-contract tests cover context preservation, metadata copying, timezone-aware timestamps, non-empty actions, metadata typing, and compatibility with provider-neutral sink implementations. The module remains EXPERIMENTAL until topology-specific trusted-proxy deployment evidence, broader production-like integration/failure-path coverage, browser-history integration, and production-like pilot evidence satisfy the DevForge module contract and quality gates.
 
 ## Upgrade Notes
 
-Changes to auth contracts, persisted identity/session/role/tenant schema, session lifetime defaults, credential rate-limit defaults, trusted-proxy/client-address policy, session transport, permission names, OpenAPI contracts, or migration history require explicit compatibility and rollback review before promotion to TRUSTED.
+Changes to auth contracts, audit-event fields or sink semantics, persisted identity/session/role/tenant schema, session lifetime defaults, credential rate-limit defaults, trusted-proxy/client-address policy, session transport, permission names, OpenAPI contracts, or migration history require explicit compatibility and rollback review before promotion to TRUSTED.
