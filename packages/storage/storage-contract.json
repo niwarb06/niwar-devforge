@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "module": "storage",
+  "required_capabilities": [
+    "file_upload",
+    "private_access",
+    "signed_access",
+    "provider_adapter"
+  ]
+}
