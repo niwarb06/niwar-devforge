@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "default_locale": "en",
+  "supported_locales": [
+    {
+      "code": "ku",
+      "native_name": "کوردی",
+      "direction": "rtl"
+    },
+    {
+      "code": "ar",
+      "native_name": "العربية",
+      "direction": "rtl"
+    },
+    {
+      "code": "en",
+      "native_name": "English",
+      "direction": "ltr"
+    }
+  ]
+}
