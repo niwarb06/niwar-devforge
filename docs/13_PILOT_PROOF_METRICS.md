@@ -6,6 +6,10 @@ Evidence date: 2026-08-22
 
 Supplemental iOS Simulator artifact evidence: 2026-09-14
 
+Supplemental iOS Simulator secure-storage integration evidence: 2026-09-21
+
+Supplemental Android Emulator secure-storage integration evidence: 2026-09-25
+
 This document records the Phase 8 pilot measurements required by `docs/01_ROADMAP_0_TO_100.md` for two materially different products generated from Niwar DevForge. It deliberately does **not** claim that either pilot is a Production Candidate.
 
 ## 1. Evidence snapshot
@@ -19,7 +23,13 @@ PR #23: `https://github.com/niwarb06/niwar-devforge/pull/23`
 
 PR #24: `https://github.com/niwarb06/niwar-devforge/pull/24`
 
-Supplemental generated-mobile iOS Simulator artifact proof is recorded in PR #36, workflow run `34893551739`, at exact evidence head `c9263969dd9c452c688e65ced312c4b2dfc654e6`. That run generated the existing Flutter pilot on `macos-15`, created an iOS host shell, resolved dependencies, analyzed the generated application code, built an unsigned debug app with `flutter build ios --simulator --debug`, and verified `build/ios/iphonesimulator/Runner.app` exists. This is build evidence only; it is **not** real-device, signing, App Store, or platform secure-storage runtime evidence.
+Supplemental generated-mobile iOS Simulator artifact proof is recorded in PR #36, workflow run `34893551739`, at exact evidence head `c9263969dd9c452c688e65ced312c4b2dfc654e6`. That run generated the existing Flutter pilot on `macos-15`, created an iOS host shell, resolved dependencies, analyzed the generated application code, built an unsigned debug app with `flutter build ios --simulator --debug`, and verified `build/ios/iphonesimulator/Runner.app` exists. This is build evidence only; PR #36 itself did **not** prove platform secure-storage runtime behavior.
+
+Supplemental iOS Simulator secure-storage integration proof is recorded in PR #37 at exact evidence head `d8ce9fdf9eb8828d025e0d8cb203d95ffdc9a636`. `Generator Flutter Auth CI` run `35584900312` completed successfully, and its `generated-flutter-auth-ios-simulator` job successfully executed the real `flutter_secure_storage` write/read/clear integration proof against the simulator platform implementation.
+
+Supplemental Android Emulator secure-storage integration proof is recorded in PR #39 at exact evidence head `7a928fbf56c2cbe0e97c0540e4ac349460a3f744`. `Generator Flutter Auth CI` run `36122169064` completed successfully, and its `generated-flutter-auth-android-emulator` job built the generated Android host, booted the emulator, and successfully executed the real secure-storage integration proof. The iOS Simulator secure-storage job also remained green in the same exact-head run.
+
+The simulator/emulator proofs establish platform secure-storage integration in CI. They do **not** claim physical-device execution, code signing, App Store/Play release readiness, or Production Candidate status.
 
 These pilots are materially different because the web pilot uses the reviewed browser BFF / secure-cookie boundary, while the mobile pilot uses the reviewed Flutter client / secure-session-vault boundary and produces mobile build artifacts.
 
@@ -147,7 +157,19 @@ PR #36 adds a separate macOS CI job without changing the Flutter module or gener
 - built an unsigned iOS Simulator debug application with `flutter build ios --simulator --debug`;
 - verified the resulting `Runner.app` directory exists.
 
-This closes the narrow **iOS Simulator artifact build** gap. It does not prove real-device execution, Keychain/secure-storage behavior on an iOS device or simulator, code signing, release/archive packaging, or App Store readiness.
+This closes the narrow **iOS Simulator artifact build** gap. PR #36 itself did not prove Keychain/secure-storage runtime behavior, code signing, release/archive packaging, or App Store readiness. The simulator secure-storage runtime gap was later addressed by PR #37.
+
+### Supplemental iOS Simulator secure-storage integration proof
+
+At exact evidence head `d8ce9fdf9eb8828d025e0d8cb203d95ffdc9a636`, PR #37's `Generator Flutter Auth CI` run `35584900312` completed successfully. Its `generated-flutter-auth-ios-simulator` job built the generated simulator host and successfully ran the `SecureSessionVault` integration proof through the real `flutter_secure_storage` platform implementation, covering secure write/read/clear behavior.
+
+This proves simulator platform integration, not physical-device execution, signing, archive packaging, or App Store readiness.
+
+### Supplemental Android Emulator secure-storage integration proof
+
+At exact evidence head `7a928fbf56c2cbe0e97c0540e4ac349460a3f744`, PR #39's `Generator Flutter Auth CI` run `36122169064` completed successfully. Its `generated-flutter-auth-android-emulator` job built the generated Android host, booted the emulator, and successfully ran the secure-storage integration proof. The existing iOS Simulator secure-storage job also completed successfully on the same exact head.
+
+This proves emulator platform integration, not physical-device execution, signing, store release readiness, or Production Candidate status.
 
 ### Defects / regressions
 
@@ -162,7 +184,7 @@ Unresolved exact-head CI regressions: **0**.
 
 **OPEN / NOT REACHED.**
 
-The current CI proof builds an Android debug APK and an unsigned iOS Simulator debug app, but it does not yet satisfy the Production Candidate definition. Important open gates include real Android/iOS device or emulator secure-storage integration, real-device/release iOS proof where required, staging deployment, release security/dependency/secret gates, monitoring/health validation, and rollback/release evidence.
+The current CI proof builds an Android debug APK and an unsigned iOS Simulator debug app, and now also proves platform secure-storage integration on both an iOS Simulator and an Android Emulator. The simulator/emulator secure-storage gap is therefore closed. Important open gates still include physical-device/release iOS proof where required, staging deployment, release security/dependency/secret gates, monitoring/health validation, and rollback/release evidence.
 
 ## 5. Combined Phase 8 metrics
 
@@ -181,7 +203,7 @@ The two pilots prove that DevForge can deterministically assemble and validate t
 - a browser product using a BFF / HttpOnly-cookie security model; and
 - a Flutter mobile product using a secure local session vault and mobile API-client security model.
 
-Both generated products run against the same reusable FastAPI backend with PostgreSQL and Redis. Both original exact-head proof lines are green. The mobile pilot additionally proves Android APK host compilation, and the supplemental PR #36 evidence proves that the same generated Flutter product can also compile into an unsigned iOS Simulator debug app on macOS.
+Both generated products run against the same reusable FastAPI backend with PostgreSQL and Redis. Both original exact-head proof lines are green. The mobile pilot additionally proves Android APK host compilation and an unsigned iOS Simulator debug build. PR #37 and PR #39 further prove the reviewed secure-session-vault boundary through the real platform `flutter_secure_storage` implementation on an iOS Simulator and Android Emulator respectively.
 
 The evidence also shows that failures found by the pilot loop were repaired in reusable DevForge boundaries rather than patched into generated product output.
 
@@ -199,6 +221,8 @@ Therefore:
 - **Defect/regression measurement:** PASS
 - **Custom-code measurement:** PASS
 - **iOS Simulator artifact build:** PASS
+- **iOS Simulator secure-storage integration:** PASS
+- **Android Emulator secure-storage integration:** PASS
 - **Production-candidate duration:** OPEN
 - **Phase 8 / 100% completion claim:** **NOT YET APPROVED**
 
@@ -216,6 +240,6 @@ Minimum next evidence should include:
 - release notes and a recorded Production Candidate timestamp;
 - no production deployment without explicit human approval.
 
-Until a real staging host is available, the remaining mobile-specific proof gap is real Android/iOS device or emulator integration against platform secure storage; the iOS Simulator artifact build itself is now evidenced separately above.
+Until a real staging host is available, the VPS-independent simulator/emulator secure-storage gap is now evidenced by PR #37 and PR #39. Physical-device and release-platform evidence remains outside these proofs and is not claimed.
 
 Once the first pilot reaches Production Candidate, record its duration here. Phase 8 should only be considered fully complete after the remaining roadmap/Definition-of-Done interpretation is reviewed against that evidence.
