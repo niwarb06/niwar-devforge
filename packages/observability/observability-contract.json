@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "module": "observability",
+  "required_capabilities": [
+    "structured_logging",
+    "request_correlation"
+  ],
+  "correlation_field": "request_id",
+  "external_exporter_required": false
+}
