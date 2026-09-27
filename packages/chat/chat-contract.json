@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "domain": "chat",
+  "capabilities": [
+    "realtime_events"
+  ],
+  "provider_adapter_required": true
+}
