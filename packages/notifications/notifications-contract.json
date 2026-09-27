@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "domain": "notifications",
+  "capabilities": [
+    "push_notifications"
+  ],
+  "provider_adapter_required": true
+}
