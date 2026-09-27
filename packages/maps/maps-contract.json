@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "domain": "maps",
+  "capabilities": [
+    "maps_adapter"
+  ],
+  "provider_adapter_required": true
+}
