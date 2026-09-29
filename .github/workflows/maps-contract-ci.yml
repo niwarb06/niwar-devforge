@@ -1,0 +1,31 @@
+name: Maps Contract CI
+
+on:
+  push:
+    paths:
+      - "packages/maps/**"
+      - ".github/workflows/maps-contract-ci.yml"
+  pull_request:
+    paths:
+      - "packages/maps/**"
+      - ".github/workflows/maps-contract-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-maps-contract:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate maps contract
+        run: python packages/maps/validate_maps_contract.py
+
+      - name: Run maps contract unit tests
+        run: python -m unittest discover -s packages/maps/tests -p "test_*.py"
