@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "domain": "media",
+  "capabilities": [
+    "image_processing",
+    "video_upload"
+  ]
+}
