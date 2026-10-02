@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "domain": "wallet_ledger",
+  "capabilities": [
+    "wallet_ledger"
+  ]
+}
