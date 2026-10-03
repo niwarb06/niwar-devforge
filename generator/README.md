@@ -13,6 +13,8 @@ The current generator supports two authentication blueprints:
 
 Both blueprints emit a deterministic `.devforge-generation.json` provenance record and a blueprint-specific `.github/workflows/ci.yml`. Web generated CI installs dependencies, typechecks, and builds with the existing generated npm contracts. Flutter generated CI resolves dependencies, verifies formatting, analyzes, and runs the generated test suite with the pinned Flutter contract. The generated workflows contain no deployment, release, staging, or production action.
 
+The Web blueprint also emits a dependency-free `node:test` scaffold at `test/scaffold.test.mjs`, an `npm test` script, and `.github/workflows/test.yml` to run that skeleton on push and pull requests. The test workflow uses the same pinned Node/checkout baseline and contains no deployment, release, staging, production, provider, or secret-consuming behavior.
+
 Both blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
 
 The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the product no longer depends on an adjacent DevForge checkout.
@@ -98,6 +100,7 @@ No registry publication is performed by this proof path.
 - unknown/unresolved template tokens fail closed;
 - output files use exclusive creation;
 - generated CI workflow selection is fixed by the validated blueprint;
+- the generated Web test skeleton uses only Node built-ins and its workflow is test-only;
 - generated local dev services and versions are fixed by the committed source-backed contract;
 - the local database password remains an explicit placeholder rather than a generated credential;
 - no timestamp or random identifier is written into generated output;
@@ -105,7 +108,7 @@ No registry publication is performed by this proof path.
 
 ## Proof gates
 
-The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally assert the generated local Docker/dev contract for both supported blueprints. `Standalone Package Distribution CI` additionally:
+The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally execute the generated Web test skeleton and assert the generated local Docker/dev contract for both supported blueprints. `Standalone Package Distribution CI` additionally:
 
 - runs generator and reusable-module tests;
 - builds versioned package bundles;
