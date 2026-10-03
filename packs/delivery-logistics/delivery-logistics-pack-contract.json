@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "pack": "delivery-logistics",
+  "capabilities": [
+    "orders",
+    "driver_courier_state",
+    "assignment",
+    "route_location",
+    "proof_of_delivery"
+  ]
+}
