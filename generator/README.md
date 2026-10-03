@@ -13,11 +13,13 @@ The current generator supports two authentication blueprints:
 
 Both blueprints emit a deterministic `.devforge-generation.json` provenance record and a blueprint-specific `.github/workflows/ci.yml`. Web generated CI installs dependencies, typechecks, and builds with the existing generated npm contracts. Flutter generated CI resolves dependencies, verifies formatting, analyzes, and runs the generated test suite with the pinned Flutter contract. The generated workflows contain no deployment, release, staging, or production action.
 
+Both blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
+
 The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the product no longer depends on an adjacent DevForge checkout.
 
 A manifest may now explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, and broader generated CI/dev-environment breadth remain future work.
+This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
 
 ## Manifest contract
 
@@ -96,12 +98,14 @@ No registry publication is performed by this proof path.
 - unknown/unresolved template tokens fail closed;
 - output files use exclusive creation;
 - generated CI workflow selection is fixed by the validated blueprint;
+- generated local dev services and versions are fixed by the committed source-backed contract;
+- the local database password remains an explicit placeholder rather than a generated credential;
 - no timestamp or random identifier is written into generated output;
 - no secrets, production domains, or credentials are generated.
 
 ## Proof gates
 
-The legacy generator Web/Flutter CI continues to protect existing behavior. `Standalone Package Distribution CI` additionally:
+The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally assert the generated local Docker/dev contract for both supported blueprints. `Standalone Package Distribution CI` additionally:
 
 - runs generator and reusable-module tests;
 - builds versioned package bundles;
