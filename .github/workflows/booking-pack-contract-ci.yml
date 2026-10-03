@@ -1,0 +1,31 @@
+name: Booking Pack Contract CI
+
+on:
+  push:
+    paths:
+      - "packs/booking/**"
+      - ".github/workflows/booking-pack-contract-ci.yml"
+  pull_request:
+    paths:
+      - "packs/booking/**"
+      - ".github/workflows/booking-pack-contract-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-booking-pack-contract:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate booking pack contract
+        run: python packs/booking/validate_booking_pack_contract.py
+
+      - name: Run booking pack unit tests
+        run: python -m unittest discover -s packs/booking/tests -p "test_*.py"
