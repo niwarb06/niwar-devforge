@@ -15,7 +15,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const GENERATOR_VERSION = "0.4.0";
+const GENERATOR_VERSION = "0.5.0";
 const TOKEN_PATTERN = /\{\{([A-Z0-9_]+)\}\}/g;
 const SLUG_PATTERN = /^[a-z][a-z0-9-]{1,47}[a-z0-9]$/;
 const NPM_PACKAGE_PATTERN = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
@@ -515,6 +515,20 @@ async function configureStandaloneWebOutput(outputRoot) {
   await writeFile(readmePath, readme.replace(legacyText, standaloneText), "utf8");
 }
 
+async function loadGeneratedCiWorkflow(blueprintName) {
+  const workflowPath = join(
+    generatorRoot,
+    "templates",
+    "generated-ci",
+    `${blueprintName}.yml`,
+  );
+  const workflow = await readFile(workflowPath, "utf8");
+  if (!workflow.endsWith("\n")) {
+    fail(`generated CI workflow asset ${blueprintName} must end with a newline`);
+  }
+  return workflow;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
@@ -532,6 +546,7 @@ async function main() {
   const templateFiles = validateTemplateFiles(
     JSON.parse(await readFile(templatePath, "utf8")),
   );
+  const generatedCiWorkflow = await loadGeneratedCiWorkflow(manifest.blueprint);
 
   const preparedBundle = args.packageBundle
     ? await preparePackageBundle(
@@ -562,6 +577,17 @@ async function main() {
       flag: "wx",
     });
   }
+
+  const generatedCiDestination = safeDestination(
+    outputRoot,
+    ".github/workflows/ci.yml",
+    "generated CI workflow path",
+  );
+  await mkdir(dirname(generatedCiDestination), { recursive: true });
+  await writeFile(generatedCiDestination, generatedCiWorkflow, {
+    encoding: "utf8",
+    flag: "wx",
+  });
 
   const vendored_packages = preparedBundle
     ? await writePreparedPackageBundle(preparedBundle, outputRoot)

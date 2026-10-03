@@ -15,7 +15,9 @@ Both blueprints emit a deterministic `.devforge-generation.json` provenance reco
 
 A manifest may now explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, and generated CI/dev-environment breadth remain future work.
+Each generated Web or Flutter scaffold now also includes `.github/workflows/ci.yml`. The Web workflow installs dependencies, typechecks, and builds. The Flutter workflow resolves dependencies, checks formatting, analyzes, and runs the generated widget test. Actions are pinned to committed revisions and the generated workflows contain no deploy, publish, release, production, or secret-consuming steps.
+
+This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, test-skeleton breadth, and Docker/dev-environment breadth remain future work.
 
 ## Manifest contract
 
@@ -91,6 +93,7 @@ No registry publication is performed by this proof path.
 - product identifiers are bounded and validated;
 - template and bundle paths cannot escape their roots;
 - package artifacts are integrity-checked before output writes;
+- generated CI workflow assets are blueprint-bound, deterministic, and build-only;
 - unknown/unresolved template tokens fail closed;
 - output files use exclusive creation;
 - no timestamp or random identifier is written into generated output;

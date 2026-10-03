@@ -124,7 +124,7 @@ export async function validateGenerationRecord(record) {
 
   if (record.schema_version !== 1) fail("schema_version must equal 1");
   if (record.generator !== "niwar-devforge") fail('generator must equal "niwar-devforge"');
-  if (record.generator_version !== "0.4.0") fail('generator_version must equal "0.4.0"');
+  if (record.generator_version !== "0.5.0") fail('generator_version must equal "0.5.0"');
   if (typeof record.blueprint !== "string" || !(record.blueprint in BLUEPRINT_MODULES)) {
     fail(`blueprint must be one of ${JSON.stringify(Object.keys(BLUEPRINT_MODULES))}`);
   }
