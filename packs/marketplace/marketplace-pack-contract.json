@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "pack": "marketplace",
+  "capabilities": [
+    "products",
+    "sellers",
+    "cart",
+    "checkout",
+    "orders",
+    "fulfillment"
+  ]
+}
