@@ -21,4 +21,4 @@ Validate a generated record with:
 node generator/validate-generation-record.mjs /path/to/generated/.devforge-generation.json
 ```
 
-The validator is stdlib-only and checks the current generator `0.4.0` contract, current blueprint/module boundaries, current committed pack contracts, and vendored dependency provenance rules. It validates metadata only; it does not execute generated application code, deploy anything, or publish artifacts.
+The validator is stdlib-only and checks the current generator `0.5.0` contract, current blueprint/module boundaries, current committed pack contracts, and vendored dependency provenance rules. It validates metadata only; it does not execute generated application code, deploy anything, or publish artifacts.
