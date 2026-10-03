@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "pack": "ai_saas",
+  "capabilities": [
+    "workspaces",
+    "usage_metering",
+    "model_provider_adapter",
+    "prompt_job_history",
+    "billing_hooks"
+  ]
+}
