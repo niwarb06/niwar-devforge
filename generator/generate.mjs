@@ -105,6 +105,48 @@ jobs:
         run: flutter test
 `,
 });
+const GENERATED_DEV_SETUP = Object.freeze({
+  "infrastructure/dev/.env.example": `POSTGRES_DB=devforge
+POSTGRES_USER=devforge
+POSTGRES_PASSWORD=<set-a-local-dev-password>
+`,
+  "infrastructure/dev/docker-compose.yml": `name: {{PRODUCT_SLUG}}-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: \${POSTGRES_DB:-devforge}
+      POSTGRES_USER: \${POSTGRES_USER:-devforge}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infrastructure/dev/.env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - devforge_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: valkey/valkey:7.2.14-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - devforge_redis_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  devforge_postgres_data:
+  devforge_redis_data:
+`,
+});
 
 function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
@@ -599,6 +641,19 @@ async function writeGeneratedCi(outputRoot, blueprintName) {
   await writeFile(destination, workflow, { encoding: "utf8", flag: "wx" });
 }
 
+async function writeGeneratedDevSetup(outputRoot, tokens) {
+  for (const [path, content] of Object.entries(GENERATED_DEV_SETUP).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    const destination = safeDestination(outputRoot, path, "generated dev path");
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, render(content, tokens, path), {
+      encoding: "utf8",
+      flag: "wx",
+    });
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
@@ -647,6 +702,7 @@ async function main() {
     });
   }
   await writeGeneratedCi(outputRoot, manifest.blueprint);
+  await writeGeneratedDevSetup(outputRoot, tokens);
 
   const vendored_packages = preparedBundle
     ? await writePreparedPackageBundle(preparedBundle, outputRoot)
