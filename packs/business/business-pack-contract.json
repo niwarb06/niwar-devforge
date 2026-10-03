@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "pack": "business",
+  "capabilities": [
+    "crud",
+    "dashboards",
+    "reports",
+    "roles",
+    "export_import"
+  ]
+}
