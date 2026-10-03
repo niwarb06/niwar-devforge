@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "pack": "booking",
+  "capabilities": [
+    "listings_properties",
+    "availability_calendar",
+    "reservations",
+    "cancellation_rules",
+    "host_owner_workflows"
+  ]
+}
