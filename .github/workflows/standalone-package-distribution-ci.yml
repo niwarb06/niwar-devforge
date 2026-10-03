@@ -116,7 +116,7 @@ jobs:
             '.standalone-generated/flutter-first/.devforge-generation.json',
           ]) {
             const record = JSON.parse(fs.readFileSync(path, 'utf8'));
-            if (record.generator_version !== '0.3.0') throw new Error(`${path}: wrong generator version`);
+            if (record.generator_version !== '0.4.0') throw new Error(`${path}: wrong generator version`);
             if (record.dependency_mode !== 'verified-vendored-bundle') throw new Error(`${path}: not vendored`);
             for (const item of Object.values(record.vendored_packages || {})) {
               if (!item.destination.startsWith('vendor/')) throw new Error(`${path}: unsafe destination`);
