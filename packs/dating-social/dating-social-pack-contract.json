@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "pack": "dating-social",
+  "capabilities": [
+    "profiles",
+    "discovery",
+    "swipe_action_model",
+    "match_state",
+    "chat",
+    "privacy",
+    "safety"
+  ]
+}
