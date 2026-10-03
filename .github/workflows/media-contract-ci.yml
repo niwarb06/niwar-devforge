@@ -1,0 +1,31 @@
+name: Media Contract CI
+
+on:
+  push:
+    paths:
+      - "packages/media/**"
+      - ".github/workflows/media-contract-ci.yml"
+  pull_request:
+    paths:
+      - "packages/media/**"
+      - ".github/workflows/media-contract-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-media-contract:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate media contract
+        run: python packages/media/validate_media_contract.py
+
+      - name: Run media unit tests
+        run: python -m unittest discover -s packages/media/tests -p "test_*.py"
