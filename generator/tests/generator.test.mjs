@@ -11,6 +11,48 @@ const generatorPath = join(generatorRoot, "generate.mjs");
 const webProofManifestPath = join(generatorRoot, "manifests", "web-auth-proof.json");
 const flutterProofManifestPath = join(generatorRoot, "manifests", "flutter-auth-proof.json");
 
+const expectedPackCapabilities = Object.freeze({
+  business: Object.freeze(["crud", "dashboards", "reports", "roles", "export_import"]),
+  booking: Object.freeze([
+    "listings_properties",
+    "availability_calendar",
+    "reservations",
+    "cancellation_rules",
+    "host_owner_workflows",
+  ]),
+  marketplace: Object.freeze([
+    "products",
+    "sellers",
+    "cart",
+    "checkout",
+    "orders",
+    "fulfillment",
+  ]),
+  "dating-social": Object.freeze([
+    "profiles",
+    "discovery",
+    "swipe_action_model",
+    "match_state",
+    "chat",
+    "privacy",
+    "safety",
+  ]),
+  "delivery-logistics": Object.freeze([
+    "orders",
+    "driver_courier_state",
+    "assignment",
+    "route_location",
+    "proof_of_delivery",
+  ]),
+  ai_saas: Object.freeze([
+    "workspaces",
+    "usage_metering",
+    "model_provider_adapter",
+    "prompt_job_history",
+    "billing_hooks",
+  ]),
+});
+
 function runGenerator(manifest, output) {
   return spawnSync(
     process.execPath,
@@ -43,7 +85,7 @@ async function assertDeterministic(manifestPath, expectedBlueprint) {
     assert.deepEqual(await snapshot(first), await snapshot(second));
 
     const generation = JSON.parse(await readFile(join(first, ".devforge-generation.json"), "utf8"));
-    assert.equal(generation.generator_version, "0.3.0");
+    assert.equal(generation.generator_version, "0.4.0");
     assert.equal(generation.blueprint, expectedBlueprint);
     assert.equal("generated_at" in generation, false);
   } finally {
@@ -57,6 +99,50 @@ test("web manifest produces byte-identical generated output", async () => {
 
 test("Flutter manifest produces byte-identical generated output", async () => {
   await assertDeterministic(flutterProofManifestPath, "flutter-mobile-auth");
+});
+
+test("supported product packs are validated and recorded deterministically", async () => {
+  const root = await mkdtemp(join(tmpdir(), "devforge-generator-pack-"));
+  try {
+    for (const [pack, capabilities] of Object.entries(expectedPackCapabilities)) {
+      const manifest = JSON.parse(await readFile(webProofManifestPath, "utf8"));
+      manifest.pack = pack;
+      const manifestPath = join(root, `${pack}.json`);
+      const output = join(root, `output-${pack}`);
+      await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+      const run = runGenerator(manifestPath, output);
+      assert.equal(run.status, 0, run.stderr);
+
+      const generation = JSON.parse(
+        await readFile(join(output, ".devforge-generation.json"), "utf8"),
+      );
+      assert.deepEqual(generation.pack, {
+        name: pack,
+        schema_version: 1,
+        capabilities,
+      });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("unsupported product pack fails before output is written", async () => {
+  const root = await mkdtemp(join(tmpdir(), "devforge-generator-pack-invalid-"));
+  try {
+    const manifest = JSON.parse(await readFile(webProofManifestPath, "utf8"));
+    manifest.pack = "unknown-pack";
+    const manifestPath = join(root, "manifest.json");
+    const output = join(root, "output");
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const run = runGenerator(manifestPath, output);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /pack must be one of/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("invalid product slug fails before output is written", async () => {
