@@ -35,6 +35,76 @@ const PACK_CONTRACTS = Object.freeze({
     "packs/delivery-logistics/delivery-logistics-pack-contract.json",
   ai_saas: "packs/ai_saas/ai_saas-pack-contract.json",
 });
+const GENERATED_CI_WORKFLOWS = Object.freeze({
+  "web-next-auth": `name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+
+      - name: Install dependencies
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        env:
+          DEVFORGE_PRODUCT_PUBLIC_ORIGIN: https://app.example.test
+          DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://api.example.test/api/v1
+        run: npm run build
+`,
+  "flutter-mobile-auth": `name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+`,
+});
 
 function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
@@ -515,6 +585,20 @@ async function configureStandaloneWebOutput(outputRoot) {
   await writeFile(readmePath, readme.replace(legacyText, standaloneText), "utf8");
 }
 
+async function writeGeneratedCi(outputRoot, blueprintName) {
+  const workflow = GENERATED_CI_WORKFLOWS[blueprintName];
+  if (typeof workflow !== "string") {
+    fail(`generated CI workflow is not defined for ${blueprintName}`);
+  }
+  const destination = safeDestination(
+    outputRoot,
+    ".github/workflows/ci.yml",
+    "generated CI path",
+  );
+  await mkdir(dirname(destination), { recursive: true });
+  await writeFile(destination, workflow, { encoding: "utf8", flag: "wx" });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
@@ -562,6 +646,7 @@ async function main() {
       flag: "wx",
     });
   }
+  await writeGeneratedCi(outputRoot, manifest.blueprint);
 
   const vendored_packages = preparedBundle
     ? await writePreparedPackageBundle(preparedBundle, outputRoot)
