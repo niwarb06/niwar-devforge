@@ -15,15 +15,26 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const GENERATOR_VERSION = "0.3.0";
+const GENERATOR_VERSION = "0.4.0";
 const TOKEN_PATTERN = /\{\{([A-Z0-9_]+)\}\}/g;
 const SLUG_PATTERN = /^[a-z][a-z0-9-]{1,47}[a-z0-9]$/;
 const NPM_PACKAGE_PATTERN = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
 const DART_PACKAGE_PATTERN = /^[a-z][a-z0-9_]{1,62}[a-z0-9]$/;
 const SAFE_NPM_SPEC_PATTERN = /^(?:file:\.{1,2}\/|[~^]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\S*$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const PACK_CAPABILITY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 const generatorRoot = dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = dirname(generatorRoot);
+const PACK_CONTRACTS = Object.freeze({
+  business: "packs/business/business-pack-contract.json",
+  booking: "packs/booking/booking-pack-contract.json",
+  marketplace: "packs/marketplace/marketplace-pack-contract.json",
+  "dating-social": "packs/dating-social/dating-social-pack-contract.json",
+  "delivery-logistics":
+    "packs/delivery-logistics/delivery-logistics-pack-contract.json",
+  ai_saas: "packs/ai_saas/ai_saas-pack-contract.json",
+});
 
 function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
@@ -131,7 +142,14 @@ function validateManifest(value) {
   assertPlainObject(value, "manifest");
   assertExactKeys(
     value,
-    new Set(["schema_version", "blueprint", "product", "modules", "package_specs"]),
+    new Set([
+      "schema_version",
+      "blueprint",
+      "product",
+      "modules",
+      "package_specs",
+      "pack",
+    ]),
     "manifest",
   );
   if (value.schema_version !== 1) fail("schema_version must equal 1");
@@ -185,7 +203,50 @@ function validateManifest(value) {
       fail(blueprint.packageSpecError(moduleName));
     }
   }
+  if (
+    value.pack !== undefined &&
+    (typeof value.pack !== "string" || !(value.pack in PACK_CONTRACTS))
+  ) {
+    fail(`pack must be one of ${JSON.stringify(Object.keys(PACK_CONTRACTS))}`);
+  }
   return { manifest: value, blueprint };
+}
+
+async function loadPackSelection(packName) {
+  if (packName === undefined) return null;
+
+  const contractPath = join(repositoryRoot, PACK_CONTRACTS[packName]);
+  const contract = JSON.parse(await readFile(contractPath, "utf8"));
+  assertPlainObject(contract, `pack contract ${packName}`);
+  assertExactKeys(
+    contract,
+    new Set(["schema_version", "pack", "capabilities"]),
+    `pack contract ${packName}`,
+  );
+  if (contract.schema_version !== 1) {
+    fail(`pack contract ${packName} schema_version must equal 1`);
+  }
+  if (contract.pack !== packName) {
+    fail(`pack contract ${packName} pack field does not match selection`);
+  }
+  if (
+    !Array.isArray(contract.capabilities) ||
+    contract.capabilities.length === 0 ||
+    !contract.capabilities.every(
+      (capability) =>
+        typeof capability === "string" &&
+        PACK_CAPABILITY_PATTERN.test(capability),
+    ) ||
+    new Set(contract.capabilities).size !== contract.capabilities.length
+  ) {
+    fail(`pack contract ${packName} capabilities are invalid`);
+  }
+
+  return {
+    name: contract.pack,
+    schema_version: contract.schema_version,
+    capabilities: [...contract.capabilities],
+  };
 }
 
 function validateTemplateFiles(value) {
@@ -461,6 +522,7 @@ async function main() {
   const { manifest, blueprint } = validateManifest(
     JSON.parse(await readFile(manifestPath, "utf8")),
   );
+  const selectedPack = await loadPackSelection(manifest.pack);
   const templatePath = join(
     generatorRoot,
     "templates",
@@ -517,6 +579,7 @@ async function main() {
     product: manifest.product,
     modules: manifest.modules,
     package_specs: manifest.package_specs,
+    ...(selectedPack ? { pack: selectedPack } : {}),
     dependency_mode: vendored_packages
       ? "verified-vendored-bundle"
       : "manifest-specs",

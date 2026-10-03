@@ -13,11 +13,13 @@ The current generator supports two authentication blueprints:
 
 Both blueprints emit a deterministic `.devforge-generation.json` provenance record. The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the product no longer depends on an adjacent DevForge checkout.
 
-This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, product packs, provider adapters, and generated CI/dev-environment breadth remain future work.
+A manifest may now explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
+
+This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, and generated CI/dev-environment breadth remain future work.
 
 ## Manifest contract
 
-`schema_version` is currently `1`. Each blueprint requires its exact ordered module set. Product identifiers and package specifications are validated before output is written.
+`schema_version` is currently `1`. Each blueprint requires its exact ordered module set. Product identifiers and package specifications are validated before output is written. The optional `pack` field is fail-closed against the six committed Phase-4 pack contracts; existing auth-only regression manifests may omit it.
 
 Two dependency modes exist during migration:
 
@@ -85,6 +87,7 @@ No registry publication is performed by this proof path.
 
 - unknown manifest/bundle keys fail closed;
 - unsupported blueprint/module combinations fail closed;
+- unsupported product-pack selections and malformed committed pack contracts fail closed;
 - product identifiers are bounded and validated;
 - template and bundle paths cannot escape their roots;
 - package artifacts are integrity-checked before output writes;
