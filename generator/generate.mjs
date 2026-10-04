@@ -147,6 +147,14 @@ volumes:
   devforge_redis_data:
 `,
 });
+const GENERATED_DATABASE_MIGRATIONS = Object.freeze({
+  "migrations/versions/0001_backend_core_baseline.py":
+    "packages/backend-core/migrations/versions/0001_backend_core_baseline.py",
+  "migrations/versions/0002_identity_sessions.py":
+    "packages/backend-core/migrations/versions/0002_identity_sessions.py",
+  "migrations/versions/0003_roles_tenants.py":
+    "packages/backend-core/migrations/versions/0003_roles_tenants.py",
+});
 
 function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
@@ -437,6 +445,24 @@ async function safeExistingSource(root, path, label) {
   return { path: sourceReal, info: lexicalInfo };
 }
 
+async function prepareGeneratedDatabaseMigrations() {
+  const prepared = [];
+  for (const [destination, sourcePath] of Object.entries(
+    GENERATED_DATABASE_MIGRATIONS,
+  ).sort(([left], [right]) => left.localeCompare(right))) {
+    const source = await safeExistingSource(
+      repositoryRoot,
+      sourcePath,
+      `generated database migration source ${sourcePath}`,
+    );
+    if (!source.info.isFile()) {
+      fail(`generated database migration source ${sourcePath} must be a file`);
+    }
+    prepared.push({ destination, source: source.path });
+  }
+  return prepared;
+}
+
 function bundleDestinationForSpec(spec) {
   return spec.startsWith("file:./") ? spec.slice("file:./".length) : spec;
 }
@@ -654,6 +680,18 @@ async function writeGeneratedDevSetup(outputRoot, tokens) {
   }
 }
 
+async function writeGeneratedDatabaseMigrations(outputRoot, migrations) {
+  for (const migration of migrations) {
+    const destination = safeDestination(
+      outputRoot,
+      migration.destination,
+      "generated database migration path",
+    );
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(migration.source, destination);
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = resolve(process.cwd(), args.manifest);
@@ -671,6 +709,7 @@ async function main() {
   const templateFiles = validateTemplateFiles(
     JSON.parse(await readFile(templatePath, "utf8")),
   );
+  const databaseMigrations = await prepareGeneratedDatabaseMigrations();
 
   const preparedBundle = args.packageBundle
     ? await preparePackageBundle(
@@ -703,6 +742,7 @@ async function main() {
   }
   await writeGeneratedCi(outputRoot, manifest.blueprint);
   await writeGeneratedDevSetup(outputRoot, tokens);
+  await writeGeneratedDatabaseMigrations(outputRoot, databaseMigrations);
 
   const vendored_packages = preparedBundle
     ? await writePreparedPackageBundle(preparedBundle, outputRoot)
