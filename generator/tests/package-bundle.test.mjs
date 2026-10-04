@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,18 +10,38 @@ import { fileURLToPath } from "node:url";
 const generatorRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const generatorPath = join(generatorRoot, "generate.mjs");
 const standaloneManifest = join(generatorRoot, "manifests", "web-auth-standalone-proof.json");
+const backendStandaloneManifest = join(
+  generatorRoot,
+  "manifests",
+  "backend-auth-standalone-proof.json",
+);
 
 function digest(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function run(bundle, output) {
+async function digestDirectory(root) {
+  const entries = (await readdir(root, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name))
+    .sort((left, right) => relative(root, left).localeCompare(relative(root, right)));
+  const hash = createHash("sha256");
+  for (const path of entries) {
+    hash.update(relative(root, path).replaceAll("\\", "/"));
+    hash.update("\0");
+    hash.update(await readFile(path));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function run(bundle, output, manifest = standaloneManifest) {
   return spawnSync(
     process.execPath,
     [
       generatorPath,
       "--manifest",
-      standaloneManifest,
+      manifest,
       "--package-bundle",
       bundle,
       "--output",
@@ -62,6 +82,33 @@ async function makeWebBundle(root, { tamper = false, mismatch = false } = {}) {
   await writeFile(join(root, "bundle.json"), `${JSON.stringify(descriptor)}\n`, "utf8");
 }
 
+async function makeBackendBundle(root) {
+  const source = join(root, "packages", "niwar-devforge-backend-core-0.1.0");
+  await mkdir(join(source, "src", "devforge_core"), { recursive: true });
+  await writeFile(
+    join(source, "pyproject.toml"),
+    '[project]\nname = "niwar-devforge-backend-core"\nversion = "0.1.0"\n',
+    "utf8",
+  );
+  await writeFile(
+    join(source, "src", "devforge_core", "main.py"),
+    "app = object()\n",
+    "utf8",
+  );
+  const descriptor = {
+    schema_version: 1,
+    modules: {
+      "backend-core": {
+        kind: "directory",
+        source: "packages/niwar-devforge-backend-core-0.1.0",
+        destination: "vendor/niwar-devforge-backend-core-0.1.0",
+        sha256: await digestDirectory(source),
+      },
+    },
+  };
+  await writeFile(join(root, "bundle.json"), `${JSON.stringify(descriptor)}\n`, "utf8");
+}
+
 test("verified package bundle is copied inside generated product", async () => {
   const root = await mkdtemp(join(tmpdir(), "devforge-bundle-ok-"));
   try {
@@ -82,6 +129,44 @@ test("verified package bundle is copied inside generated product", async () => {
       record.vendored_packages["web-bff-core"].sha256,
       /^[0-9a-f]{64}$/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verified backend directory bundle is copied inside generated product", async () => {
+  const root = await mkdtemp(join(tmpdir(), "devforge-backend-bundle-ok-"));
+  try {
+    const bundle = join(root, "bundle");
+    const output = join(root, "product");
+    await makeBackendBundle(bundle);
+    const result = run(bundle, output, backendStandaloneManifest);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      await readFile(
+        join(
+          output,
+          "vendor",
+          "niwar-devforge-backend-core-0.1.0",
+          "pyproject.toml",
+        ),
+        "utf8",
+      ),
+      /name = "niwar-devforge-backend-core"/,
+    );
+    assert.equal(
+      await readFile(join(output, "requirements.txt"), "utf8"),
+      "vendor/niwar-devforge-backend-core-0.1.0\n",
+    );
+    const record = JSON.parse(
+      await readFile(join(output, ".devforge-generation.json"), "utf8"),
+    );
+    assert.equal(record.dependency_mode, "verified-vendored-bundle");
+    assert.equal(
+      record.vendored_packages["backend-core"].destination,
+      "vendor/niwar-devforge-backend-core-0.1.0",
+    );
+    assert.match(record.vendored_packages["backend-core"].sha256, /^[0-9a-f]{64}$/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
