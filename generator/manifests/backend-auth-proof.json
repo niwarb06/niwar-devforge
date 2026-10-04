@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "blueprint": "backend-fastapi-auth",
+  "product": {
+    "slug": "generated-backend-proof",
+    "display_name": "Generated Backend Proof",
+    "package_name": "generated-backend-proof"
+  },
+  "modules": [
+    "backend-core"
+  ],
+  "package_specs": {
+    "backend-core": "../../packages/backend-core"
+  }
+}

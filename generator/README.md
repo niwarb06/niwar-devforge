@@ -6,24 +6,27 @@ The generator assembles product scaffolds from validated manifests and versioned
 
 ## Current slice
 
-The current generator supports two authentication blueprints:
+The current generator supports three authentication-oriented blueprints:
 
 - `web-next-auth`, composing `@niwar-devforge/web-bff-core` and `@niwar-devforge/web-session-core` into a Next.js product;
-- `flutter-mobile-auth`, composing `flutter-auth-core` into a Flutter mobile product.
+- `flutter-mobile-auth`, composing `flutter-auth-core` into a Flutter mobile product;
+- `backend-fastapi-auth`, composing the existing `backend-core` into a thin runnable FastAPI backend scaffold.
 
-Both blueprints emit a deterministic `.devforge-generation.json` provenance record and a blueprint-specific `.github/workflows/ci.yml`. Web generated CI installs dependencies, typechecks, and builds with the existing generated npm contracts. Flutter generated CI resolves dependencies, verifies formatting, analyzes, and runs the generated test suite with the pinned Flutter contract. The generated workflows contain no deployment, release, staging, or production action.
+All three blueprints emit a deterministic `.devforge-generation.json` provenance record and a blueprint-specific `.github/workflows/ci.yml`. Web generated CI installs dependencies, typechecks, and builds with the existing generated npm contracts. Flutter generated CI resolves dependencies, verifies formatting, analyzes, and runs the generated test suite with the pinned Flutter contract. Backend generated CI installs the selected backend-core path, executes the generated Python `unittest` skeleton, and imports the FastAPI application. The generated workflows contain no deployment, release, staging, or production action.
 
 The Web blueprint also emits a dependency-free `node:test` scaffold at `test/scaffold.test.mjs`, an `npm test` script, and `.github/workflows/test.yml` to run that skeleton on push and pull requests. The test workflow uses the same pinned Node/checkout baseline and contains no deployment, release, staging, production, provider, or secret-consuming behavior.
 
-Both blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
+The backend blueprint emits `.env.example`, `requirements.txt`, `app.py`, and `tests/test_scaffold.py`. The current proof manifest intentionally uses the repository-local `../../packages/backend-core` dependency path; standalone backend package bundling is a later Phase-5 slice rather than being invented in this foundation change.
 
-Both current blueprints also emit the canonical backend-core Alembic revision history at `migrations/versions/`. The generator carries source-backed snapshots of committed revisions `0001_backend_core_baseline` through `0003_roles_tenants` inside its own assets so generation remains self-contained; regression tests require those snapshots and emitted files to stay byte-identical to the canonical backend-core revisions. It does not invent or modify migration history. Alembic runner/config files and backend runtime composition remain deferred to the backend-scaffold slice, and generation does not execute database migrations.
+All current blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
 
-The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the product no longer depends on an adjacent DevForge checkout.
+All current blueprints also emit the canonical backend-core Alembic revision history at `migrations/versions/`. The generator carries source-backed snapshots of committed revisions `0001_backend_core_baseline` through `0003_roles_tenants` inside its own assets so generation remains self-contained; regression tests require those snapshots and emitted files to stay byte-identical to the canonical backend-core revisions. It does not invent or modify migration history. Alembic runner/config wiring remains deferred, and generation does not execute database migrations.
 
-A manifest may now explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
+The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the Web and Flutter products no longer depend on an adjacent DevForge checkout.
 
-This still does not represent the complete Phase 5 generator. Admin/backend generation, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
+A manifest may explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
+
+This still does not represent the complete Phase 5 generator. Admin generation, standalone backend package distribution, Alembic runner/config wiring, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
 
 ## Manifest contract
 
@@ -31,10 +34,10 @@ This still does not represent the complete Phase 5 generator. Admin/backend gene
 
 Two dependency modes exist during migration:
 
-1. `manifest-specs` — the earlier repository-local proof mode retained for regression compatibility.
+1. `manifest-specs` — the repository-local proof mode retained for regression compatibility and currently used by the backend scaffold proof.
 2. `verified-vendored-bundle` — the standalone mode. Package artifacts are supplied through `--package-bundle`, SHA-256 verified, destination-confined to `vendor/`, and copied into the generated product.
 
-New standalone product-repository proofs SHOULD use `verified-vendored-bundle`; they must not assume that `../../packages/...` exists outside the generated repository.
+New standalone product-repository proofs SHOULD use `verified-vendored-bundle`; they must not assume that `../../packages/...` exists outside the generated repository. The current bundle builder covers Web and Flutter only; backend standalone bundling is explicitly deferred.
 
 ## Repository-local regression usage
 
@@ -42,6 +45,14 @@ New standalone product-repository proofs SHOULD use `verified-vendored-bundle`; 
 node generator/generate.mjs \
   --manifest generator/manifests/web-auth-proof.json \
   --output .generated/generated-auth-proof
+```
+
+Generate the backend scaffold proof with:
+
+```bash
+node generator/generate.mjs \
+  --manifest generator/manifests/backend-auth-proof.json \
+  --output .generated/generated-backend-proof
 ```
 
 ## Standalone package-bundle usage
@@ -103,6 +114,7 @@ No registry publication is performed by this proof path.
 - output files use exclusive creation;
 - generated CI workflow selection is fixed by the validated blueprint;
 - the generated Web test skeleton uses only Node built-ins and its workflow is test-only;
+- the generated backend scaffold reuses the canonical backend-core application rather than reimplementing backend auth/domain behavior;
 - generated local dev services and versions are fixed by the committed source-backed contract;
 - generated database migration assets are regression-checked byte-for-byte against the committed backend-core revision sources;
 - the local database password remains an explicit placeholder rather than a generated credential;
@@ -111,10 +123,12 @@ No registry publication is performed by this proof path.
 
 ## Proof gates
 
-The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally execute the generated Web test skeleton, assert the generated local Docker/dev contract, and verify byte-identical canonical database migrations for both supported blueprints. `Standalone Package Distribution CI` additionally:
+The existing generator Web/Flutter CI continues to protect existing behavior. `Generator Backend Auth CI` additionally runs the complete generator regression suite, generates the backend scaffold, installs the repository-local backend-core dependency, executes the generated Python test skeleton, and imports the generated FastAPI application. Generator tests also execute the generated Web test skeleton, assert generated local Docker/dev contracts, verify byte-identical canonical database migrations, and prove deterministic backend scaffold output.
+
+`Standalone Package Distribution CI` additionally:
 
 - runs generator and reusable-module tests;
-- builds versioned package bundles;
+- builds versioned Web and Flutter package bundles;
 - generates both standalone products twice and compares outputs byte-for-byte;
 - proves no parent-monorepo package references exist;
 - exports each generated product into `/tmp` and initializes it as a clean Git repository;
@@ -122,4 +136,4 @@ The legacy generator Web/Flutter CI continues to protect existing behavior. Gene
 - installs, audits, typechecks, and builds the Web product using Next.js default Turbopack;
 - resolves, analyzes, and widget-tests the Flutter product using only its vendored reusable package.
 
-Passing this gate proves that the generated auth products are relocatable outside the DevForge source checkout. It does not itself publish packages to a public/private registry, execute real staging, or authorize production.
+Passing the standalone gate proves that the generated Web and Flutter auth products are relocatable outside the DevForge source checkout. It does not yet prove standalone backend relocation, publish packages to a public/private registry, execute real staging, or authorize production.
