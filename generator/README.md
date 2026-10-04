@@ -17,11 +17,13 @@ The Web blueprint also emits a dependency-free `node:test` scaffold at `test/sca
 
 Both blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
 
+Both current blueprints also emit the canonical backend-core Alembic revision history at `migrations/versions/`. The generator carries source-backed snapshots of committed revisions `0001_backend_core_baseline` through `0003_roles_tenants` inside its own assets so generation remains self-contained; regression tests require those snapshots and emitted files to stay byte-identical to the canonical backend-core revisions. It does not invent or modify migration history. Alembic runner/config files and backend runtime composition remain deferred to the backend-scaffold slice, and generation does not execute database migrations.
+
 The standalone proof path can also vendor verified reusable package artifacts inside the generated repository so the product no longer depends on an adjacent DevForge checkout.
 
 A manifest may now explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin/backend generation, database migrations, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
+This still does not represent the complete Phase 5 generator. Admin/backend generation, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
 
 ## Manifest contract
 
@@ -102,13 +104,14 @@ No registry publication is performed by this proof path.
 - generated CI workflow selection is fixed by the validated blueprint;
 - the generated Web test skeleton uses only Node built-ins and its workflow is test-only;
 - generated local dev services and versions are fixed by the committed source-backed contract;
+- generated database migration assets are regression-checked byte-for-byte against the committed backend-core revision sources;
 - the local database password remains an explicit placeholder rather than a generated credential;
 - no timestamp or random identifier is written into generated output;
 - no secrets, production domains, or credentials are generated.
 
 ## Proof gates
 
-The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally execute the generated Web test skeleton and assert the generated local Docker/dev contract for both supported blueprints. `Standalone Package Distribution CI` additionally:
+The legacy generator Web/Flutter CI continues to protect existing behavior. Generator tests additionally execute the generated Web test skeleton, assert the generated local Docker/dev contract, and verify byte-identical canonical database migrations for both supported blueprints. `Standalone Package Distribution CI` additionally:
 
 - runs generator and reusable-module tests;
 - builds versioned package bundles;
