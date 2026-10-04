@@ -1,0 +1,83 @@
+name: Generator Admin Auth CI
+
+on:
+  push:
+    paths:
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/generator-admin-auth-ci.yml"
+  pull_request:
+    paths:
+      - "generator/**"
+      - "packages/web-bff-core/**"
+      - "packages/web-session-core/**"
+      - ".github/workflows/generator-admin-auth-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-admin-auth:
+    runs-on: ubuntu-24.04
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DEVFORGE_PRODUCT_PUBLIC_ORIGIN: https://admin.example.test
+      DEVFORGE_PRODUCT_BACKEND_API_BASE_URL: https://api.example.test/api/v1
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+
+      - name: Generator unit tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Build reusable web BFF core
+        working-directory: packages/web-bff-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Build reusable web session core
+        working-directory: packages/web-session-core
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Generate Admin proof twice
+        run: |
+          rm -rf .generated/admin-first .generated/admin-second
+          node generator/generate.mjs \
+            --manifest generator/manifests/admin-auth-proof.json \
+            --output .generated/admin-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/admin-auth-proof.json \
+            --output .generated/admin-second
+
+      - name: Prove deterministic output
+        run: diff -ru .generated/admin-first .generated/admin-second
+
+      - name: Install generated Admin product
+        working-directory: .generated/admin-first
+        env:
+          npm_config_ignore_scripts: "true"
+        run: npm install --no-audit --no-fund
+
+      - name: Run generated Admin test skeleton
+        working-directory: .generated/admin-first
+        run: npm test
+
+      - name: Typecheck generated Admin product
+        working-directory: .generated/admin-first
+        run: npm run typecheck
+
+      - name: Build generated Admin product
+        working-directory: .generated/admin-first
+        run: npm run build
