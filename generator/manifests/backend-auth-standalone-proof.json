@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "blueprint": "backend-fastapi-auth",
+  "product": {
+    "slug": "standalone-backend-proof",
+    "display_name": "Standalone Backend Proof",
+    "package_name": "standalone-backend-proof"
+  },
+  "modules": [
+    "backend-core"
+  ],
+  "package_specs": {
+    "backend-core": "vendor/niwar-devforge-backend-core-0.1.0"
+  }
+}

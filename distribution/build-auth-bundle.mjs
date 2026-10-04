@@ -83,11 +83,24 @@ async function flutterMetadata(packageDir) {
   return { name, version };
 }
 
+async function backendMetadata(packageDir) {
+  const pyproject = await readFile(join(packageDir, "pyproject.toml"), "utf8");
+  const name = pyproject.match(/^name\s*=\s*"([^"]+)"\s*$/m)?.[1];
+  const version = pyproject.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1];
+  if (name !== "niwar-devforge-backend-core") fail("Backend core package name is unexpected");
+  if (!version || !VERSION_PATTERN.test(version)) {
+    fail("Backend core package version must be a simple semantic version");
+  }
+  return { name, version };
+}
+
 await rm(output, { recursive: true, force: true });
 const webRoot = join(output, "web");
 const flutterRoot = join(output, "flutter");
+const backendRoot = join(output, "backend");
 await mkdir(webRoot, { recursive: true });
 await mkdir(flutterRoot, { recursive: true });
+await mkdir(backendRoot, { recursive: true });
 
 const bff = await npmEntry(
   webRoot,
@@ -147,5 +160,44 @@ await writeFile(
   "utf8",
 );
 
+const backendSource = join(root, "packages/backend-core");
+const backend = await backendMetadata(backendSource);
+const backendSourceRelative = `packages/${backend.name}-${backend.version}`;
+const backendDestination = `vendor/${backend.name}-${backend.version}`;
+const backendOut = join(backendRoot, backendSourceRelative);
+await cp(backendSource, backendOut, {
+  recursive: true,
+  filter: (source) =>
+    !source
+      .split(/[\\/]/)
+      .some(
+        (part) =>
+          part === ".git" ||
+          part === ".venv" ||
+          part === "__pycache__" ||
+          part === ".pytest_cache" ||
+          part === ".mypy_cache" ||
+          part === ".ruff_cache" ||
+          part === "build" ||
+          part === "dist",
+      ),
+});
+await writeFile(
+  join(backendRoot, "bundle.json"),
+  `${JSON.stringify({
+    schema_version: 1,
+    modules: {
+      "backend-core": {
+        kind: "directory",
+        source: backendSourceRelative,
+        destination: backendDestination,
+        sha256: await shaDir(backendOut),
+      },
+    },
+  }, null, 2)}\n`,
+  "utf8",
+);
+
 console.log(`Built Web package bundle at ${webRoot}`);
 console.log(`Built Flutter package bundle at ${flutterRoot}`);
+console.log(`Built Backend package bundle at ${backendRoot}`);
