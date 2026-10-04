@@ -451,7 +451,7 @@ async function prepareGeneratedDatabaseMigrations() {
     GENERATED_DATABASE_MIGRATIONS,
   ).sort(([left], [right]) => left.localeCompare(right))) {
     const source = await safeExistingSource(
-      repositoryRoot,
+      join(generatorRoot, "assets"),
       sourcePath,
       `generated database migration source ${sourcePath}`,
     );
