@@ -8,6 +8,7 @@ on:
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
       - "packages/flutter-auth-core/**"
+      - "packages/backend-core/**"
       - ".github/workflows/standalone-package-distribution-ci.yml"
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
       - "packages/flutter-auth-core/**"
+      - "packages/backend-core/**"
       - ".github/workflows/standalone-package-distribution-ci.yml"
 
 permissions:
@@ -33,6 +35,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.19.0"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -72,6 +78,7 @@ jobs:
           node distribution/build-auth-bundle.mjs .package-bundle
           test -f .package-bundle/web/bundle.json
           test -f .package-bundle/flutter/bundle.json
+          test -f .package-bundle/backend/bundle.json
 
       - name: Generate standalone products twice
         run: |
@@ -93,17 +100,28 @@ jobs:
             --manifest generator/manifests/flutter-auth-standalone-proof.json \
             --package-bundle .package-bundle/flutter \
             --output .standalone-generated/flutter-second
+          node generator/generate.mjs \
+            --manifest generator/manifests/backend-auth-standalone-proof.json \
+            --package-bundle .package-bundle/backend \
+            --output .standalone-generated/backend-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/backend-auth-standalone-proof.json \
+            --package-bundle .package-bundle/backend \
+            --output .standalone-generated/backend-second
           diff -ru .standalone-generated/web-first .standalone-generated/web-second
           diff -ru .standalone-generated/flutter-first .standalone-generated/flutter-second
+          diff -ru .standalone-generated/backend-first .standalone-generated/backend-second
 
       - name: Prove generated dependency boundaries
         run: |
           set -euo pipefail
-          ! grep -R --line-number --fixed-strings '../../packages/' .standalone-generated/web-first .standalone-generated/flutter-first
-          ! grep -R --line-number --fixed-strings '../packages/' .standalone-generated/web-first .standalone-generated/flutter-first
+          ! grep -R --line-number --fixed-strings '../../packages/' .standalone-generated/web-first .standalone-generated/flutter-first .standalone-generated/backend-first
+          ! grep -R --line-number --fixed-strings '../packages/' .standalone-generated/web-first .standalone-generated/flutter-first .standalone-generated/backend-first
           test -f .standalone-generated/web-first/vendor/web-bff-core-0.1.0.tgz
           test -f .standalone-generated/web-first/vendor/web-session-core-0.1.0.tgz
           test -f .standalone-generated/flutter-first/vendor/niwar_devforge_flutter_auth-0.1.0/pubspec.yaml
+          test -f .standalone-generated/backend-first/vendor/niwar-devforge-backend-core-0.1.0/pyproject.toml
+          test -f .standalone-generated/backend-first/vendor/niwar-devforge-backend-core-0.1.0/src/devforge_core/main.py
           node - <<'NODE'
           const fs = require('fs');
           const webPackage = JSON.parse(fs.readFileSync('.standalone-generated/web-first/package.json', 'utf8'));
@@ -111,9 +129,12 @@ jobs:
           const webReadme = fs.readFileSync('.standalone-generated/web-first/README.md', 'utf8');
           if (!webReadme.includes('default Turbopack')) throw new Error('standalone Web README must document default Turbopack');
           if (webReadme.includes('Re-evaluate the default bundler')) throw new Error('legacy bundler note leaked into standalone output');
+          const backendRequirements = fs.readFileSync('.standalone-generated/backend-first/requirements.txt', 'utf8').trim();
+          if (backendRequirements !== 'vendor/niwar-devforge-backend-core-0.1.0') throw new Error('standalone Backend dependency must resolve inside vendor/');
           for (const path of [
             '.standalone-generated/web-first/.devforge-generation.json',
             '.standalone-generated/flutter-first/.devforge-generation.json',
+            '.standalone-generated/backend-first/.devforge-generation.json',
           ]) {
             const record = JSON.parse(fs.readFileSync(path, 'utf8'));
             if (record.generator_version !== '0.4.0') throw new Error(`${path}: wrong generator version`);
@@ -128,10 +149,11 @@ jobs:
       - name: Export into clean standalone Git repositories
         run: |
           set -euo pipefail
-          rm -rf /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter
+          rm -rf /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter /tmp/devforge-standalone-backend
           cp -R .standalone-generated/web-first /tmp/devforge-standalone-web
           cp -R .standalone-generated/flutter-first /tmp/devforge-standalone-flutter
-          for repo in /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter; do
+          cp -R .standalone-generated/backend-first /tmp/devforge-standalone-backend
+          for repo in /tmp/devforge-standalone-web /tmp/devforge-standalone-flutter /tmp/devforge-standalone-backend; do
             git -C "$repo" init -q
             git -C "$repo" config user.email ci@example.invalid
             git -C "$repo" config user.name DevForge-CI
@@ -165,6 +187,13 @@ jobs:
           flutter analyze
           flutter test test/auth_screen_test.dart --reporter expanded
 
+      - name: Install and test standalone Backend product
+        working-directory: /tmp/devforge-standalone-backend
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m unittest discover -s tests
+          python -c "from app import app; assert app"
+
       - name: Record proof summary
         run: |
           {
@@ -172,10 +201,12 @@ jobs:
             echo
             echo '- Web reusable modules: versioned npm tarballs vendored inside generated repository'
             echo '- Flutter auth module: versioned package directory vendored inside generated repository'
+            echo '- Backend core module: versioned Python source package directory vendored inside generated repository'
             echo '- Bundle artifacts: SHA-256 verified before generation and after copy'
             echo '- Bundle source path: realpath-confined; symlink sources rejected'
             echo '- Parent monorepo package paths: absent'
             echo '- Generated products: initialized as clean standalone Git repositories'
             echo '- Web: dependency audit + typecheck + generated npm build script using Next.js default Turbopack PASS'
             echo '- Flutter: dependency resolution + analyze + widget auth test PASS'
+            echo '- Backend: dependency install + generated unittest skeleton + FastAPI application import PASS'
           } >> "$GITHUB_STEP_SUMMARY"
