@@ -9,6 +9,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const BLUEPRINT_MODULES = Object.freeze({
   "web-next-auth": Object.freeze(["web-bff-core", "web-session-core"]),
   "flutter-mobile-auth": Object.freeze(["flutter-auth-core"]),
+  "backend-fastapi-auth": Object.freeze(["backend-core"]),
 });
 
 const PACK_CONTRACTS = Object.freeze({
@@ -17,7 +18,7 @@ const PACK_CONTRACTS = Object.freeze({
   marketplace: "packs/marketplace/marketplace-pack-contract.json",
   "dating-social": "packs/dating-social/dating-social-pack-contract.json",
   "delivery-logistics": "packs/delivery-logistics/delivery-logistics-pack-contract.json",
-  ai_saas: "packs/ai_saas/ai_saas-pack-contract.json",
+  ai_saas: "packs/ai_saas/ai-saas-pack-contract.json",
 });
 
 function fail(message) {
