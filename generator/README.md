@@ -12,6 +12,8 @@ The current generator supports three authentication-oriented blueprints:
 - `flutter-mobile-auth`, composing `flutter-auth-core` into a Flutter mobile product;
 - `backend-fastapi-auth`, composing the existing `backend-core` into a thin runnable FastAPI backend scaffold.
 
+The Phase-5 Admin scaffold foundation intentionally reuses the existing `web-next-auth` blueprint because the canonical architecture defines both Web and Admin on Next.js + TypeScript. `generator/manifests/admin-auth-proof.json` gives that generated surface an explicit Admin product identity without duplicating the authentication template or inventing Admin business UI or authorization policy.
+
 All three blueprints emit a deterministic `.devforge-generation.json` provenance record and a blueprint-specific `.github/workflows/ci.yml`. Web generated CI installs dependencies, typechecks, and builds with the existing generated npm contracts. Flutter generated CI resolves dependencies, verifies formatting, analyzes, and runs the generated test suite with the pinned Flutter contract. Backend generated CI installs the selected backend-core path, executes the generated Python `unittest` skeleton, and imports the FastAPI application. The generated workflows contain no deployment, release, staging, or production action.
 
 The Web blueprint also emits a dependency-free `node:test` scaffold at `test/scaffold.test.mjs`, an `npm test` script, and `.github/workflows/test.yml` to run that skeleton on push and pull requests. The test workflow uses the same pinned Node/checkout baseline and contains no deployment, release, staging, production, provider, or secret-consuming behavior.
@@ -26,7 +28,7 @@ The standalone proof path can vendor verified reusable package artifacts inside 
 
 A manifest may explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin generation, Alembic runner/config wiring, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
+This still does not represent the complete Phase 5 generator. Admin-specific UI/authorization composition, Alembic runner/config wiring, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
 
 ## Manifest contract
 
@@ -45,6 +47,14 @@ New standalone product-repository proofs SHOULD use `verified-vendored-bundle`; 
 node generator/generate.mjs \
   --manifest generator/manifests/web-auth-proof.json \
   --output .generated/generated-auth-proof
+```
+
+Generate the Admin scaffold proof with:
+
+```bash
+node generator/generate.mjs \
+  --manifest generator/manifests/admin-auth-proof.json \
+  --output .generated/generated-admin-proof
 ```
 
 Generate the backend scaffold proof with:
@@ -133,7 +143,7 @@ No registry publication is performed by this proof path.
 
 ## Proof gates
 
-The existing generator Web/Flutter CI continues to protect existing behavior. `Generator Backend Auth CI` additionally runs the complete generator regression suite, generates the backend scaffold, installs the repository-local backend-core dependency, executes the generated Python test skeleton, and imports the generated FastAPI application. Generator tests also execute the generated Web test skeleton, assert generated local Docker/dev contracts, verify byte-identical canonical database migrations, and prove deterministic backend scaffold output.
+The existing generator Web/Flutter CI continues to protect existing behavior. `Generator Backend Auth CI` additionally runs the complete generator regression suite, generates the backend scaffold, installs the repository-local backend-core dependency, executes the generated Python test skeleton, and imports the generated FastAPI application. `Generator Admin Auth CI` generates the Admin proof twice, proves byte-identical output, then installs, tests, typechecks, and builds the generated Admin product against the existing reusable Web authentication modules. Generator tests also execute the generated Web test skeleton, assert generated local Docker/dev contracts, verify byte-identical canonical database migrations, and prove deterministic backend and Admin scaffold output.
 
 `Standalone Package Distribution CI` additionally:
 
