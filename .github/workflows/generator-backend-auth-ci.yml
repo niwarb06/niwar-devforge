@@ -1,0 +1,53 @@
+name: Generator Backend Auth CI
+
+on:
+  push:
+    paths:
+      - "generator/**"
+      - "packages/backend-core/**"
+      - ".github/workflows/generator-backend-auth-ci.yml"
+  pull_request:
+    paths:
+      - "generator/**"
+      - "packages/backend-core/**"
+      - ".github/workflows/generator-backend-auth-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-backend-auth:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Generator unit tests
+        run: node --test generator/tests/*.test.mjs
+
+      - name: Generate backend scaffold
+        run: |
+          rm -rf .generated/backend-auth-proof
+          node generator/generate.mjs \
+            --manifest generator/manifests/backend-auth-proof.json \
+            --output .generated/backend-auth-proof
+
+      - name: Install generated backend dependencies
+        working-directory: .generated/backend-auth-proof
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Run generated backend test skeleton
+        working-directory: .generated/backend-auth-proof
+        run: python -m unittest discover -s tests
+
+      - name: Import generated backend application
+        working-directory: .generated/backend-auth-proof
+        run: python -c "from app import app; assert app"

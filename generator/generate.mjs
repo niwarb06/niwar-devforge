@@ -104,6 +104,34 @@ jobs:
       - name: Test
         run: flutter test
 `,
+  "backend-fastapi-auth": `name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Test
+        run: python -m unittest discover -s tests
+
+      - name: Import application
+        run: python -c "from app import app; assert app"
+`,
 });
 const GENERATED_DEV_SETUP = Object.freeze({
   "infrastructure/dev/.env.example": `POSTGRES_DB=devforge
@@ -160,7 +188,7 @@ function fail(message) {
   throw new Error(`DevForge generator: ${message}`);
 }
 
-function validateFlutterPackagePath(spec) {
+function validateRelativePackagePath(spec) {
   if (
     typeof spec !== "string" ||
     spec.length < 4 ||
@@ -213,11 +241,23 @@ const BLUEPRINTS = Object.freeze({
     modules: Object.freeze(["flutter-auth-core"]),
     packageNamePattern: DART_PACKAGE_PATTERN,
     packageNameError: "product.package_name must be a lowercase Dart package name",
-    validatePackageSpec: validateFlutterPackagePath,
+    validatePackageSpec: validateRelativePackagePath,
     packageSpecError: (moduleName) =>
       `package_specs.${moduleName} must be a safe relative package path`,
     tokens: (manifest) => ({
       FLUTTER_AUTH_PATH: manifest.package_specs["flutter-auth-core"],
+    }),
+  }),
+  "backend-fastapi-auth": Object.freeze({
+    modules: Object.freeze(["backend-core"]),
+    packageNamePattern: SLUG_PATTERN,
+    packageNameError:
+      "product.package_name must be a lowercase Python distribution name",
+    validatePackageSpec: validateRelativePackagePath,
+    packageSpecError: (moduleName) =>
+      `package_specs.${moduleName} must be a safe relative package path`,
+    tokens: (manifest) => ({
+      BACKEND_CORE_PATH: manifest.package_specs["backend-core"],
     }),
   }),
 });
