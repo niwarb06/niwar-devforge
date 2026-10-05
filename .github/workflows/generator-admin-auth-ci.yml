@@ -3,12 +3,14 @@ name: Generator Admin Auth CI
 on:
   push:
     paths:
+      - "distribution/**"
       - "generator/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
       - ".github/workflows/generator-admin-auth-ci.yml"
   pull_request:
     paths:
+      - "distribution/**"
       - "generator/**"
       - "packages/web-bff-core/**"
       - "packages/web-session-core/**"
@@ -80,4 +82,75 @@ jobs:
 
       - name: Build generated Admin product
         working-directory: .generated/admin-first
+        run: npm run build
+
+      - name: Build versioned Web package bundle
+        run: |
+          set -euo pipefail
+          rm -rf .package-bundle
+          node distribution/build-auth-bundle.mjs .package-bundle
+          test -f .package-bundle/web/bundle.json
+
+      - name: Generate standalone Admin proof twice
+        run: |
+          set -euo pipefail
+          rm -rf .generated/admin-standalone-first .generated/admin-standalone-second
+          node generator/generate.mjs \
+            --manifest generator/manifests/admin-auth-standalone-proof.json \
+            --package-bundle .package-bundle/web \
+            --output .generated/admin-standalone-first
+          node generator/generate.mjs \
+            --manifest generator/manifests/admin-auth-standalone-proof.json \
+            --package-bundle .package-bundle/web \
+            --output .generated/admin-standalone-second
+          diff -ru .generated/admin-standalone-first .generated/admin-standalone-second
+
+      - name: Prove standalone Admin dependency boundary
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number --fixed-strings '../../packages/' .generated/admin-standalone-first
+          ! grep -R --line-number --fixed-strings '../packages/' .generated/admin-standalone-first
+          test -f .generated/admin-standalone-first/vendor/web-bff-core-0.1.0.tgz
+          test -f .generated/admin-standalone-first/vendor/web-session-core-0.1.0.tgz
+          node - <<'NODE'
+          const fs = require('fs');
+          const record = JSON.parse(fs.readFileSync('.generated/admin-standalone-first/.devforge-generation.json', 'utf8'));
+          if (record.generator_version !== '0.4.0') throw new Error('wrong generator version');
+          if (record.dependency_mode !== 'verified-vendored-bundle') throw new Error('standalone Admin is not vendored');
+          for (const item of Object.values(record.vendored_packages || {})) {
+            if (!item.destination.startsWith('vendor/')) throw new Error('unsafe vendored destination');
+            if (!/^[0-9a-f]{64}$/.test(item.sha256)) throw new Error('invalid vendored digest');
+          }
+          NODE
+
+      - name: Export standalone Admin into clean Git repository
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/devforge-standalone-admin
+          cp -R .generated/admin-standalone-first /tmp/devforge-standalone-admin
+          git -C /tmp/devforge-standalone-admin init -q
+          git -C /tmp/devforge-standalone-admin config user.email ci@example.invalid
+          git -C /tmp/devforge-standalone-admin config user.name DevForge-CI
+          git -C /tmp/devforge-standalone-admin add .
+          git -C /tmp/devforge-standalone-admin diff --cached --check
+          rm -rf .package-bundle .generated/admin-standalone-first .generated/admin-standalone-second
+
+      - name: Install and audit standalone Admin product
+        working-directory: /tmp/devforge-standalone-admin
+        env:
+          npm_config_ignore_scripts: "true"
+        run: |
+          npm install --no-audit --no-fund
+          npm audit --audit-level=high
+
+      - name: Run standalone Admin test skeleton
+        working-directory: /tmp/devforge-standalone-admin
+        run: npm test
+
+      - name: Typecheck standalone Admin product
+        working-directory: /tmp/devforge-standalone-admin
+        run: npm run typecheck
+
+      - name: Build standalone Admin product
+        working-directory: /tmp/devforge-standalone-admin
         run: npm run build
