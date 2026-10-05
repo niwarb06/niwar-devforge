@@ -18,17 +18,17 @@ All three blueprints emit a deterministic `.devforge-generation.json` provenance
 
 The Web blueprint also emits a dependency-free `node:test` scaffold at `test/scaffold.test.mjs`, an `npm test` script, and `.github/workflows/test.yml` to run that skeleton on push and pull requests. The test workflow uses the same pinned Node/checkout baseline and contains no deployment, release, staging, production, provider, or secret-consuming behavior.
 
-The backend blueprint emits `.env.example`, `requirements.txt`, `app.py`, and `tests/test_scaffold.py`. Repository-local proofs may select `../../packages/backend-core`; standalone generation may instead select the verified versioned backend-core source directory vendored under `vendor/`.
+The backend blueprint emits `.env.example`, `requirements.txt`, `app.py`, and `tests/test_scaffold.py`. Repository-local proofs may select `../../packages/backend-core`; standalone generation may instead select the verified versioned backend-core source directory vendored under `vendor/`. Backend output also carries the canonical backend-core `alembic.ini`, `migrations/env.py`, and `migrations/script.py.mako` runner/config files and documents the explicit operator-run migration command; generation itself never executes migrations.
 
 All current blueprints also emit the source-backed local development files `infrastructure/dev/docker-compose.yml` and `infrastructure/dev/.env.example`. This generated dev setup contains only PostgreSQL 16 and Valkey 7.2.14 with the same health checks and local password placeholder as the committed DevForge development infrastructure. The Compose project name is derived from the validated product slug; no application container, deployment behavior, staging configuration, production configuration, or generated credential is included.
 
-All current blueprints also emit the canonical backend-core Alembic revision history at `migrations/versions/`. The generator carries source-backed snapshots of committed revisions `0001_backend_core_baseline` through `0003_roles_tenants` inside its own assets so generation remains self-contained; regression tests require those snapshots and emitted files to stay byte-identical to the canonical backend-core revisions. It does not invent or modify migration history. Alembic runner/config wiring remains deferred, and generation does not execute database migrations.
+All current blueprints also emit the canonical backend-core Alembic revision history at `migrations/versions/`. The generator carries source-backed snapshots of committed revisions `0001_backend_core_baseline` through `0003_roles_tenants` inside its own assets so generation remains self-contained; regression tests require those snapshots and emitted files to stay byte-identical to the canonical backend-core revisions. It does not invent or modify migration history. The Backend blueprint additionally emits the canonical backend-core Alembic runner/config files, regression-checked byte-for-byte against their source; Web, Flutter, and Admin outputs do not receive backend-only runner wiring. Generation does not execute database migrations.
 
 The standalone proof path can vendor verified reusable package artifacts inside the generated repository so the Web, Flutter, and Backend products no longer depend on an adjacent DevForge checkout.
 
 A manifest may explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin-specific UI/authorization composition, Alembic runner/config wiring, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
+This still does not represent the complete Phase 5 generator. Admin-specific UI/authorization composition, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
 
 ## Manifest contract
 
@@ -137,13 +137,14 @@ No registry publication is performed by this proof path.
 - the generated backend scaffold reuses the canonical backend-core application rather than reimplementing backend auth/domain behavior;
 - generated local dev services and versions are fixed by the committed source-backed contract;
 - generated database migration assets are regression-checked byte-for-byte against the committed backend-core revision sources;
+- generated Backend Alembic runner/config files are regression-checked byte-for-byte against the committed backend-core sources;
 - the local database password remains an explicit placeholder rather than a generated credential;
 - no timestamp or random identifier is written into generated output;
 - no secrets, production domains, or credentials are generated.
 
 ## Proof gates
 
-The existing generator Web/Flutter CI continues to protect existing behavior. `Generator Backend Auth CI` additionally runs the complete generator regression suite, generates the backend scaffold, installs the repository-local backend-core dependency, executes the generated Python test skeleton, and imports the generated FastAPI application. `Generator Admin Auth CI` generates the Admin proof twice, proves byte-identical output, then installs, tests, typechecks, and builds the generated Admin product against the existing reusable Web authentication modules. Generator tests also execute the generated Web test skeleton, assert generated local Docker/dev contracts, verify byte-identical canonical database migrations, and prove deterministic backend and Admin scaffold output.
+The existing generator Web/Flutter CI continues to protect existing behavior. `Generator Backend Auth CI` additionally runs the complete generator regression suite, generates the backend scaffold, installs the repository-local backend-core dependency, executes the generated Python test skeleton, and imports the generated FastAPI application. `Generator Admin Auth CI` generates the Admin proof twice, proves byte-identical output, then installs, tests, typechecks, and builds the generated Admin product against the existing reusable Web authentication modules. Generator tests also execute the generated Web test skeleton, assert generated local Docker/dev contracts, verify byte-identical canonical database migrations and Backend Alembic runner/config files, and prove deterministic backend and Admin scaffold output.
 
 `Standalone Package Distribution CI` additionally:
 
