@@ -329,6 +329,7 @@ jobs:
           flutter devices
           flutter test integration_test/secure_storage_integration_test.dart \
             -d "$DEVICE_ID" \
+            --no-dds \
             --reporter expanded
 
       - name: Stop Android emulator
