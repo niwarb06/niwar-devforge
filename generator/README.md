@@ -28,7 +28,7 @@ The standalone proof path can vendor verified reusable package artifacts inside 
 
 A manifest may explicitly select one of the six Phase-4 product packs: `business`, `booking`, `marketplace`, `dating-social`, `delivery-logistics`, or `ai_saas`. The generator validates that selection against the committed pack contract and records the selected pack schema/capabilities in `.devforge-generation.json`. Pack selection has no default and does not yet compose pack runtime logic into the generated scaffold.
 
-This still does not represent the complete Phase 5 generator. Admin-specific UI/authorization composition, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work.
+The Phase-5 roadmap baseline is now evidenced by `generator/tests/phase5-roadmap-acceptance.test.mjs`: deterministic Mobile/Web/Admin/Backend generation, selected pack metadata, database migrations, environment examples, test skeletons, CI workflows, Docker/dev setup, and the documentation manifest are all asserted from generated output. This does not make the broader generator feature-complete: Admin-specific UI/authorization composition, pack runtime composition, provider adapters, and broader application/service development-environment composition remain future work and require separate scope/approval.
 
 ## Manifest contract
 
