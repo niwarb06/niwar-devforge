@@ -210,8 +210,14 @@ jobs:
           cp .generated/flutter-first/pubspec.yaml .generated/android-emulator-host/pubspec.yaml
           cp .generated/flutter-first/analysis_options.yaml .generated/android-emulator-host/analysis_options.yaml
           mkdir -p .generated/android-emulator-host/integration_test
+          mkdir -p .generated/android-emulator-host/test_driver
           cp packages/flutter-auth-core/integration_test/secure_storage_integration_test.dart \
             .generated/android-emulator-host/integration_test/secure_storage_integration_test.dart
+          cat > .generated/android-emulator-host/test_driver/integration_test.dart <<'DART'
+          import 'package:integration_test/integration_test_driver.dart';
+
+          Future<void> main() => integrationDriver();
+          DART
           python3 - <<'PY'
           from pathlib import Path
 
@@ -225,8 +231,8 @@ jobs:
           PY
           cd .generated/android-emulator-host
           flutter pub get
-          dart format --output=none --set-exit-if-changed integration_test
-          flutter analyze lib integration_test
+          dart format --output=none --set-exit-if-changed integration_test test_driver
+          flutter analyze lib integration_test test_driver
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
 
@@ -327,9 +333,11 @@ jobs:
           DEVICE_ID="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ {print $1; exit}')"
           test -n "$DEVICE_ID"
           flutter devices
-          flutter test integration_test/secure_storage_integration_test.dart \
+          flutter drive \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/secure_storage_integration_test.dart \
             -d "$DEVICE_ID" \
-            --reporter expanded
+            --no-dds
 
       - name: Stop Android emulator
         if: always()

@@ -58,6 +58,8 @@ A deterministic project generator selects core + modules + pack and emits:
 - Docker/dev setup
 - Documentation manifest
 
+Evidence baseline: `generator/tests/phase5-roadmap-acceptance.test.mjs` generates the Mobile/Web/Admin/Backend proof products twice and requires byte-identical output. It also verifies selected product-pack metadata plus generated migrations, environment examples, test skeletons, CI workflows, Docker/dev setup, and `.devforge-generation.json`. This proves the Phase-5 roadmap baseline without authorizing pack runtime implementation, provider adapters, deployment, staging, release, or production work.
+
 ## Phase 6 — AI Agent Automation (86–92%)
 Agents may scaffold, implement, test, audit, document, and prepare PRs under repository rules. Human approval remains required for security-sensitive, data-destructive, payment, and production-release changes.
 
