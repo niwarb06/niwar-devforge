@@ -197,6 +197,27 @@ jobs:
             --manifest generator/manifests/flutter-auth-proof.json \
             --output .generated/flutter-first
 
+      - name: Install pinned Android NDK for emulator build
+        run: |
+          set -euo pipefail
+          # Flutter 3.47.0 uses this NDK. Keep in sync with the pinned Flutter version.
+          ndk_version="28.2.13676358"
+          sdkmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          ndk_dir="$ANDROID_SDK_ROOT/ndk/$ndk_version"
+          test -x "$sdkmanager"
+
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "ndk;$ndk_version" \
+              && test -f "$ndk_dir/source.properties" \
+              && grep -Eq "^Pkg.Revision[[:space:]]*=[[:space:]]*$ndk_version$" "$ndk_dir/source.properties"; then
+              exit 0
+            fi
+            echo "Android NDK $ndk_version installation failed (attempt $attempt/3)." >&2
+            rm -rf "$ndk_dir"
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          exit 1
+
       - name: Build generated product in Android emulator host
         run: |
           flutter create \
