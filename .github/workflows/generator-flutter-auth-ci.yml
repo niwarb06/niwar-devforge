@@ -197,6 +197,27 @@ jobs:
             --manifest generator/manifests/flutter-auth-proof.json \
             --output .generated/flutter-first
 
+      - name: Install pinned Android NDK for emulator build
+        run: |
+          set -euo pipefail
+          # Flutter 3.47.0 uses this NDK. Keep in sync with the pinned Flutter version.
+          ndk_version="28.2.13676358"
+          sdkmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          ndk_dir="$ANDROID_SDK_ROOT/ndk/$ndk_version"
+          test -x "$sdkmanager"
+
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "ndk;$ndk_version" \
+              && test -f "$ndk_dir/source.properties" \
+              && grep -Eq "^Pkg.Revision[[:space:]]*=[[:space:]]*$ndk_version$" "$ndk_dir/source.properties"; then
+              exit 0
+            fi
+            echo "Android NDK $ndk_version installation failed (attempt $attempt/3)." >&2
+            rm -rf "$ndk_dir"
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          exit 1
+
       - name: Build generated product in Android emulator host
         run: |
           flutter create \
@@ -414,12 +435,74 @@ jobs:
 
       - name: Run iOS Simulator secure-storage integration proof
         working-directory: .generated/ios-host
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           DEVICE_UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for devices in data["devices"].values() for device in devices if device.get("isAvailable") and device["name"].startswith("iPhone")))')"
           test -n "$DEVICE_UDID"
           xcrun simctl boot "$DEVICE_UDID" || true
           xcrun simctl bootstatus "$DEVICE_UDID" -b
-          flutter test integration_test/secure_storage_integration_test.dart \
-            -d "$DEVICE_UDID" \
-            --reporter expanded
+          export DEVICE_UDID
+          # Flutter tool occasionally hangs before iOS integration_test starts
+          # (https://github.com/flutter/flutter/issues/181771). Retry only that
+          # startup stall; never retry test failures or mid-test timeouts.
+          python3 - <<'PY'
+          import os
+          import signal
+          import subprocess
+          import sys
+          import threading
+
+          command = [
+              "flutter", "test",
+              "integration_test/secure_storage_integration_test.dart",
+              "-d", os.environ["DEVICE_UDID"],
+              "--reporter", "expanded",
+          ]
+          test_name = "platform secure storage persists and clears a session"
+
+          for attempt in (1, 2):
+              print(f"iOS secure-storage test: attempt {attempt}/2", flush=True)
+              started = threading.Event()
+              process = subprocess.Popen(
+                  command,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+                  bufsize=1,
+                  start_new_session=True,
+              )
+
+              def relay():
+                  for line in process.stdout:
+                      print(line, end="", flush=True)
+                      if test_name in line:
+                          started.set()
+
+              reader = threading.Thread(target=relay, daemon=True)
+              reader.start()
+              try:
+                  result = process.wait(timeout=660)
+              except subprocess.TimeoutExpired:
+                  print("iOS test exceeded 11 minutes; stopping its process group.", flush=True)
+                  os.killpg(process.pid, signal.SIGTERM)
+                  try:
+                      process.wait(timeout=15)
+                  except subprocess.TimeoutExpired:
+                      os.killpg(process.pid, signal.SIGKILL)
+                      process.wait()
+                  reader.join(timeout=5)
+                  if started.is_set():
+                      sys.exit("iOS secure-storage test stalled after starting: no retry")
+                  if attempt == 2:
+                      sys.exit("iOS test startup stalled twice: failing CI")
+                  print("iOS test did not start: retrying full test once", flush=True)
+                  continue
+
+              reader.join(timeout=5)
+              if result != 0:
+                  sys.exit(result)
+              if not started.is_set():
+                  sys.exit("Flutter exited successfully without evidence of test execution")
+              print("iOS secure-storage integration test passed", flush=True)
+              break
+          PY
