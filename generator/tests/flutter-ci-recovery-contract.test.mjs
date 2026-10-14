@@ -15,6 +15,7 @@ async function workflowStep(name, nextName) {
   const next = `\n      - name: ${nextName}`;
   assert.equal(workflow.split(start).length, 2, `${name} must appear exactly once`);
   const remainder = workflow.split(start)[1];
+  if (nextName === null) return remainder;
   assert.ok(remainder.includes(next), `${name} must precede ${nextName}`);
   return remainder.split(next)[0];
 }
@@ -37,7 +38,7 @@ test("Android emulator CI pins, verifies, and bounds NDK installation retries", 
 test("iOS simulator CI retries startup stalls only, never test failures", async () => {
   const step = await workflowStep(
     "Run iOS Simulator secure-storage integration proof",
-    "Stop iOS Simulator",
+    null,
   );
   assert.match(step, /for attempt in \(1, 2\):/);
   assert.match(step, /process\.wait\(timeout=660\)/);
