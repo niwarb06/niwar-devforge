@@ -38,8 +38,18 @@ def classify_path(path: str, status: str = "M") -> tuple[int, str]:
         return HIGH, "unsupported git change status"
     if path in PROTECTED or path.startswith(".github/rulesets/"):
         return HIGH, "protected governance or merge control"
-    if set(PurePosixPath(path).parts) & SENSITIVE:
+    parts = PurePosixPath(path).parts
+    # Security/CI intent can appear in a filename, not just in a directory.
+    # For example generated-database-migrations.test.mjs must never be LOW.
+    tokens = {token for part in parts for token in re.split(r"[-_.]", part.lower())}
+    security_tokens = SENSITIVE | frozenset({
+        "alembic", "database", "db", "security", "secure", "secret",
+        "credential", "permission", "ruleset", "codeowners",
+    })
+    if set(parts) & SENSITIVE or tokens & security_tokens:
         return HIGH, "security, data or operations-sensitive path"
+    if tokens & {"ci", "workflow", "workflows", "pipeline", "codeql", "gitleaks"}:
+        return MEDIUM, "CI or scanning verification requires review"
     if status == "D":
         return MEDIUM, "deletion requires review"
     if path.startswith(".github/workflows/"):
