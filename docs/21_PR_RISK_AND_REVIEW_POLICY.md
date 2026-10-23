@@ -16,7 +16,7 @@ The active protect-main ruleset disallows deletion and non-fast-forward and requ
 | MEDIUM | GitHub Actions workflows (except protected required gate), generator/runtime/source, dependencies, dev configuration, deletions, unknown files | Independent HUMAN approval on exact latest head, full CI, no blockers; no autonomous merge without review |
 | HIGH | Ruleset/branch protection, required gate, agent/security/quality policy, auth/identity/KYC, payments/wallet, credentials, migrations, staging/production/release or destructive work | Explicit user authorization plus independent human review and security/compatibility assessment; no autonomous merge |
 
-The highest-risk changed file determines the entire PR risk. Renames or unknown statuses fail closed. A test-only path does not prove safe test assertions; weakening them invalidates LOW classification and must block merge.
+The highest-risk changed file determines the entire PR risk. Renames or unknown statuses fail closed. A test-only path does not prove safe test assertions; weakening them invalidates LOW classification and must block merge. The advisory classifier treats security/database/authentication terms in **filenames as well as directories** as HIGH (including sensitive test files); CI/scanning filenames are at least MEDIUM. This remains a conservative hint, never approval to merge.
 
 ## Independent review rules
 
