@@ -32,6 +32,30 @@ class PrRiskAdvisoryTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(classify_path(path)[0], HIGH)
 
+    def test_sensitive_test_and_doc_filenames_do_not_auto_merge(self):
+        for path in (
+            "generator/tests/generated-database-migrations.test.mjs",
+            "generator/tests/generated-backend-alembic.test.mjs",
+            "generator/tests/generated-flutter-auth.test.mjs",
+            "apps/web_next/tests/e2e/auth.spec.ts",
+            "docs/security-hardening.md",
+            "tests/permissions.test.ts",
+            "generator/tests/generated-payment-contract.test.mjs",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(classify_path(path)[0], HIGH)
+
+    def test_ci_test_files_require_review(self):
+        for path in (
+            "generator/tests/flutter-ci-recovery-contract.test.mjs",
+            "generator/tests/generated-ci.test.mjs",
+            "docs/ci-runner-guidance.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(classify_path(path)[0], MEDIUM)
+        self.assertEqual(classify_path("docs/authors-guide.md")[0], LOW)
+        self.assertEqual(classify_path("generator/tests/generator.test.mjs")[0], LOW)
+
     def test_deletions_never_low(self):
         self.assertEqual(classify_path("docs/README.md", "D")[0], MEDIUM)
 
