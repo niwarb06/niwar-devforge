@@ -25,6 +25,56 @@ The highest-risk changed file determines the entire PR risk. Renames or unknown 
 - Check reviewer approval against the latest exact head; any head change invalidates assumptions.
 - If no reviewer is available, report as blocked. Never bypass required review.
 
+## Proposed solo-maintainer exception — NOT ACTIVE
+
+**Discussion only. This text does not authorize self-approval, bypass existing
+independent human review requirements, or change GitHub rulesets.** The
+repository has a single working maintainer. The active GitHub protect-main
+ruleset permits zero approvals, but that technical setting is not the same as
+the DevForge governance requirement above. A GitHub PR author cannot provide
+an independent human review of their own PR; an AI COMMENT review is not a
+GitHub APPROVED review.
+
+The owner has asked whether a **documented one-time exception** might be a
+practical alternative for a narrowly scoped MEDIUM security dependency patch.
+If the owner later adopts a policy exception through an explicitly authorized
+HIGH-risk governance process, the following safeguards are recommended:
+
+1. **Eligibility:** MEDIUM only, such as a same-major, vendor-patched dependency
+   bump with no auth, identity, permissions, payments, data migration, secret,
+   deployment, production, branch-protection, required-gate, or security-policy
+   change. HIGH never qualifies. Classify the actual diff, not just filenames.
+2. **Head-bound authorization:** The owner must give an explicit, publicly
+   auditable PR comment naming the *exact* full 40-character head SHA, the
+   scope, the missing independent reviewer, and explicit acceptance of the
+   residual risk. Chat instructions and implicit consent alone are not a
+   substitute for a recorded repository decision.
+3. **Evidence:** Independently inspect the entire patch and upstream vendor
+   advisories; verify transitive dependencies and application compatibility.
+   Every applicable push AND PR check run on the exact head must finish
+   successfully, including real integration/device tests, required PR gate,
+   CodeQL, supply-chain, secret scans, and npm audits. Reject any failure,
+   cancellation, unexplained neutral/skip, or missing expected gate. A
+   successful retry does not demonstrate that an intermittent flaw is fixed.
+4. **Review transparency:** Attach a machine/AI technical review as COMMENTED
+   evidence. Never present it as human, independent, or APPROVED. Do not
+   fabricate a second account or use an alternate identity for self-approval.
+5. **Execution:** Require clean mergeability, no unresolved review threads,
+   refreshed base/head comparison, a positive recorded owner decision, and
+   GitHub's `expected_head_sha` guard. No force push, direct protected-main
+   write, implicit auto-merge, CI-policy weakening, or deployment.
+6. **Post-merge:** Independently verify the new main SHA, commit signature,
+   required checks, security findings on the default branch, and a decision
+   log. Reopen an issue if an alert remains; never manually dismiss a finding
+   merely because a PR merged.
+
+**Activation gate:** This is only a future-policy option. Since changing the
+governance policy is itself HIGH risk, the existing HIGH authorization and
+independent-review requirements remain in force for adoption. Do not apply
+this draft retroactively to PR #82 or any other open PR without a valid
+policy change. If that review is unavailable, record the blocked decision
+rather than silently waive it.
+
 ## Pre-merge and post-merge
 
 1. Re-fetch current main, PR head and base SHA, diff, review threads and security scope.
