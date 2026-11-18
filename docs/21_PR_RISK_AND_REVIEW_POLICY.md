@@ -1,99 +1,55 @@
-# Niwar DevForge — PR Risk and Independent Review Proposal
+# Niwar DevForge — PR Risk and Solo-Maintainer AI Review Policy
 
-**Status: advisory only; NOT an enforced GitHub merge gate.**
+**Status:** This is a repository operating policy **only once merged to protected `main`**. Until then it is a proposal on PR #79. This document does not itself edit the GitHub `protect-main` ruleset or the required CI gate.
 
-This proposal and its classifier do not modify the GitHub ruleset, enforce approvals, or authorize merges. Changes to this policy or classifier are themselves HIGH risk.
+## Owner decision and review identity
 
-## GitHub protection gap observed 14 October 2026
+The sole owner explicitly requested on **2026-11-18** that DevForge no longer require a second human reviewer for AI-assisted PR review and safe completion. Under this owner-delegated, single-maintainer workflow, the assistant may inspect, record a **technical AI approval**, and merge eligible PRs only after all mandatory safeguards below succeed.
 
-The active protect-main ruleset disallows deletion and non-fast-forward and requires PRs with resolved review threads, but it requires only the required-pr-gate status check. Required approving review count is zero and strict up-to-date checks are disabled. Do **not** treat mergeable=true as full verification.
+- **AI review is NOT an independent human approval or GitHub `APPROVED` review.** It is logged truthfully as an AI technical verdict in a `COMMENTED` PR review or auditable PR comment, with exact reviewed SHA and evidence.
+- The connected GitHub account may also be the PR author; do not attempt author self-approval through GitHub `APPROVE`, invent a second person, or imply AI is human.
+- The owner accepts the **loss of an independent human second pair of eyes** as a deliberate governance tradeoff, not evidence that the residual risk is zero. Automated tests complement, not guarantee, security review.
+- Branch-protection rules, required checks, licenses, confidentiality and security policies still apply. Never silently override an actual required GitHub approval.
 
-## Risk and decision
+## Risk classes and authorization
 
-| Risk | Typical changes | Required decision |
+| Risk | Typical scope | Decision under this policy |
 |---|---|---|
-| LOW | Ordinary documentation, isolated additive or non-weakening tests | Automated merge only after all exact-head push and PR CI is green, clean mergeability, content/diff review, no blockers |
-| MEDIUM | GitHub Actions workflows (except protected required gate), generator/runtime/source, dependencies, dev configuration, deletions, unknown files | Independent HUMAN approval on exact latest head, full CI, no blockers; no autonomous merge without review |
-| HIGH | Ruleset/branch protection, required gate, agent/security/quality policy, auth/identity/KYC, payments/wallet, credentials, migrations, staging/production/release or destructive work | Explicit user authorization plus independent human review and security/compatibility assessment; no autonomous merge |
+| LOW | Ordinary documentation, narrowly additive tests with intact assertions | AI technical review and **all exact-head applicable push + PR checks** must pass; agent may merge with expected-head SHA guard |
+| MEDIUM | Generator/source/runtime and same-major pinned dependency updates, normal CI workflow changes other than the protected required gate | Comprehensive AI source/security/dependency review **plus all applicable exact-head PR and push checks, actual logs, and compatibility evidence**; agent may merge after an auditable AI technical approval and verified no blockers |
+| HIGH | Governance, branch protection/required gate, authentication/identity/permissions, secrets, KYC/payments/wallet, migrations, production/staging/release, destructive actions | **Explicit owner authorization for the specific scope**, comprehensive security/compatibility and rollback review, and all applicable evidence and checks. No blanket autonomous approval or implicit HIGH merge. A separate human reviewer is recommended but **not mandatory under the owner's amended rule**. If the action involves production, secrets, access broadening, destructive data, or weakening any quality/security control, its existing explicit authorization and safety constraints still apply |
 
-The highest-risk changed file determines the entire PR risk. Renames or unknown statuses fail closed. A test-only path does not prove safe test assertions; weakening them invalidates LOW classification and must block merge. The advisory classifier treats security/database/authentication terms in **filenames as well as directories** as HIGH (including sensitive test files); CI/scanning filenames are at least MEDIUM. This remains a conservative hint, never approval to merge.
+The highest-risk file **or behavior** determines the entire PR risk; an advisory path classifier is not a security proof. Unknown files, renames, deletions, sensitive filenames, governance and required-gate changes must be conservatively classified. No change that disables tests, masks failures, suppresses scans, bypasses authorization, or weakens required quality/security gates is eligible for automatic completion.
 
-## Independent review rules
+**One-time adoption of this HIGH governance change:** The owner's 2026-11-18 request explicitly authorizes proposing and, once the exact resulting PR is comprehensively reviewed and all required safeguards pass, adopting this solo-maintainer AI-review rule by a protected-branch PR merge. Record the exact head and owner-delegation context in that PR. This does not pre-authorize other HIGH PRs or production/deployment operations.
 
-- The authoring agent's self-review, own GitHub comment, passing tests, or separate pass by the same agent do not constitute an independent HUMAN approval.
-- AI review can provide additional evidence; do not claim it is an approved GitHub human review.
-- Check reviewer approval against the latest exact head; any head change invalidates assumptions.
-- If no reviewer is available, report as blocked. Never bypass required review.
+## Mandatory pre-merge checklist — every risk class
 
-## Proposed solo-maintainer exception — NOT ACTIVE
+1. Re-read repository instructions and inspect the **actual entire patch**, files changed, surrounding contracts, relevant vendor advisories, dependencies, permissions, scope and security/data risks. Record the current protected `main`, base SHA, PR head SHA, author, risk class and any blocking findings.
+2. Confirm PR is open, not draft, cleanly mergeable, has no unresolved review threads, no unreviewed scope expansion and no stale blocking approval/change request. Do not bypass repository branch protections.
+3. Query GitHub Actions and check-runs **for the exact current head**; **every applicable PR and push workflow**, quality/security test, required PR gate, CodeQL, secrets/dependency and supply-chain scan, build, typecheck, integration, platform test and vulnerability audit must be finished successfully. If a workflow is expected but missing, investigate; a green aggregate badge is not enough. Failed, cancelled, pending, timed-out, skipped or unexplained neutral checks block.
+4. Examine **real job logs**, not only badges, for important audit and runtime results; verify dependency versions, transitive risks, vendor security status and application compatibility. Record known flaky tests distinctly; passing on retry does not prove the flake fixed. Any unresolved significant new vulnerability or compatibility defect blocks.
+5. Submit a **truthfully identified AI technical approval / no-blockers review as `COMMENTED`**, anchored to the exact latest head. Include scope, risk, evidence URLs, residual risks and merge decision. If checks fail or uncertainty is material, write BLOCKED instead of approval.
+6. For **HIGH**, check documented, explicit owner scope authorization before merge, and assess rollback; never infer permission from a general desire for faster progress. Keep release/deployment, credential rotation, destructive operations and direct changes to protected `main` out of autonomous merge operations.
+7. Immediately before merge re-fetch PR head and base SHA, current `main`, check runs, security alerts, review-thread state and mergeability. If **head or base drift** invalidates prior tests, stop and re-run/review; never rely on stale checks after substantive base changes.
+8. Merge **only through the GitHub pull-request API**, using `expected_head_sha`; no direct writes to protected `main`, branch deletion, force-push, CI gate edits or deployment. If the merge guard rejects, stop and investigate rather than forcing it.
+9. Verify GitHub reports `merged=true`, inspect resulting `main` commit and signature when available, required checks/post-merge evidence, and outstanding security alerts. Log exact outcome and remaining problems. Never claim success before verification.
 
-**Discussion only. This text does not authorize self-approval, bypass existing
-independent human review requirements, or change GitHub rulesets.** The
-repository has a single working maintainer. The active GitHub protect-main
-ruleset permits zero approvals, but that technical setting is not the same as
-the DevForge governance requirement above. A GitHub PR author cannot provide
-an independent human review of their own PR; an AI COMMENT review is not a
-GitHub APPROVED review.
+## Existing protections and stop conditions
 
-The owner has asked whether a **documented one-time exception** might be a
-practical alternative for a narrowly scoped MEDIUM security dependency patch.
-If the owner later adopts a policy exception through an explicitly authorized
-HIGH-risk governance process, the following safeguards are recommended:
+- Preserve `AGENTS.md`, `docs/04_SECURITY_BASELINE.md`, `docs/07_AI_AGENT_RULES.md`, `docs/09_QUALITY_GATES.md`, `docs/12_DEFINITION_OF_DONE.md` and `.github/workflows/required-pr-gate.yml`; stronger module-specific safety constraints override this operational policy.
+- PR #66 remains excluded from all edits/merges unless separately authorized.
+- Dependency remediation PRs must keep production and development `npm audit`, supply-chain scanning and genuine device/integration testing.
+- A blocked PR remains open with reasons; never relabel `COMMENTED` as `APPROVED`, forge human identity, or dismiss a vulnerability merely because CI is green.
+- Repo-wide automatic merge features are not enabled by this document. Each safe PR requires a fresh per-head review and final guarded merge decision.
 
-1. **Eligibility:** MEDIUM only, such as a same-major, vendor-patched dependency
-   bump with no auth, identity, permissions, payments, data migration, secret,
-   deployment, production, branch-protection, required-gate, or security-policy
-   change. HIGH never qualifies. Classify the actual diff, not just filenames.
-2. **Head-bound authorization:** The owner must give an explicit, publicly
-   auditable PR comment naming the *exact* full 40-character head SHA, the
-   scope, the missing independent reviewer, and explicit acceptance of the
-   residual risk. Chat instructions and implicit consent alone are not a
-   substitute for a recorded repository decision.
-3. **Evidence:** Independently inspect the entire patch and upstream vendor
-   advisories; verify transitive dependencies and application compatibility.
-   Every applicable push AND PR check run on the exact head must finish
-   successfully, including real integration/device tests, required PR gate,
-   CodeQL, supply-chain, secret scans, and npm audits. Reject any failure,
-   cancellation, unexplained neutral/skip, or missing expected gate. A
-   successful retry does not demonstrate that an intermittent flaw is fixed.
-4. **Review transparency:** Attach a machine/AI technical review as COMMENTED
-   evidence. Never present it as human, independent, or APPROVED. Do not
-   fabricate a second account or use an alternate identity for self-approval.
-5. **Execution:** Require clean mergeability, no unresolved review threads,
-   refreshed base/head comparison, a positive recorded owner decision, and
-   GitHub's `expected_head_sha` guard. No force push, direct protected-main
-   write, implicit auto-merge, CI-policy weakening, or deployment.
-6. **Post-merge:** Independently verify the new main SHA, commit signature,
-   required checks, security findings on the default branch, and a decision
-   log. Reopen an issue if an alert remains; never manually dismiss a finding
-   merely because a PR merged.
+## Advisory risk classifier
 
-**Activation gate:** This is only a future-policy option. Since changing the
-governance policy is itself HIGH risk, the existing HIGH authorization and
-independent-review requirements remain in force for adoption. Do not apply
-this draft retroactively to PR #82 or any other open PR without a valid
-policy change. If that review is unavailable, record the blocked decision
-rather than silently waive it.
+Run from a checked-out PR branch:
 
-## Pre-merge and post-merge
+```sh
+python scripts/pr_risk_advisory.py --base <40-character-base-sha>
+python -m unittest discover -s scripts/tests -p 'test_pr_risk_advisory.py'
+```
 
-1. Re-fetch current main, PR head and base SHA, diff, review threads and security scope.
-2. Inspect the actual patch and assign the highest risk; path classification is only advisory.
-3. Ensure all applicable PR AND push checks for the exact head have finished successfully, including required-pr-gate, security and platform jobs. Pending, failed, cancelled and unexplained skipped checks block.
-4. Ensure current base and clean mergeability; require independent review for MEDIUM/HIGH, explicit user authorization for HIGH.
-5. LOW only: GitHub merge via expected_head_sha guard, then verify new main, signature, and post-merge checks.
-6. Record evidence, continue with the next approved task; never change protected main directly, force-push or deploy.
-
-## Optional advisory command
-
-From a checked-out PR branch, run:
-    python scripts/pr_risk_advisory.py --base <40-character-base-sha>
-
-Run self-tests:
-    python -m unittest discover -s scripts/tests -p 'test_pr_risk_advisory.py'
-
-The script returns JSON about file-path risk only. It does NOT check CI, contents, security findings or human approvals and is NOT wired to required-pr-gate.
-
-## Future GitHub ruleset changes — SEPARATE HIGH-risk request
-
-After explicit authorization and independent review, consider requiring a suitable human approval and strict up-to-date CI or a verified aggregate required gate. Audit stable job names, path filtering and availability of an independent reviewer first: requiring every optional path-filtered workflow could deadlock ordinary PRs; requiring a human reviewer could deadlock a solo-maintainer project. Do not change or weaken protect-main/required-pr-gate in this proposal.
+The classifier is **advisory-only** and intentionally fail-closed on sensitive or unknown paths. It does not determine approval, bypass tests, or modify GitHub rulesets.
