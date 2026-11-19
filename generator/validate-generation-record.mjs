@@ -9,6 +9,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const BLUEPRINT_MODULES = Object.freeze({
   "web-next-auth": Object.freeze(["web-bff-core", "web-session-core"]),
   "flutter-mobile-auth": Object.freeze(["flutter-auth-core"]),
+  "backend-fastapi-auth": Object.freeze(["backend-core"]),
 });
 
 const PACK_CONTRACTS = Object.freeze({
